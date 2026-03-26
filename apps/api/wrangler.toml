@@ -1,0 +1,17 @@
+name = "trono-api"
+main = "src/index.ts"
+compatibility_date = "2024-01-15"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "trono-db"
+database_id = "YOUR_DATABASE_ID"
+
+[vars]
+ENVIRONMENT = "development"
+JWT_SECRET = "change-me-in-production"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["TronoAPI"]
