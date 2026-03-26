@@ -260,7 +260,7 @@ npm run db:migrate
 
 ### API (Workers + D1)
 1. Instalar dependências: `npm install`
-2. Criar a base D1: `cd apps/api && wrangler d1 create trono-db` e atualizar o `database_id` em `apps/api/wrangler.toml` (o worker está nomeado como `trono-api` nesse ficheiro).
+2. Criar a base D1: `cd apps/api && wrangler d1 create trono-db` e atualizar o `database_id` em `apps/api/wrangler.toml` (o nome do worker nesse ficheiro é `trono-api`).
 3. Aplicar migrações: `npm run db:migrate` (executa `wrangler d1 migrations apply trono-db`).
 4. Segredos e variáveis:
    - `wrangler secret put JWT_SECRET`
