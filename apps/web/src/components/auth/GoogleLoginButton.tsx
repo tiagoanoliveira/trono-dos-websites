@@ -28,10 +28,12 @@ export function GoogleLoginButton({ onSuccess }: GoogleLoginButtonProps) {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
   useEffect(() => {
-    if (!clientId) {
+    const envClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (typeof envClientId !== 'string' || envClientId.length === 0) {
       setError('Configuração Google em falta');
       return;
     }
+    const safeClientId = envClientId;
 
     const scriptId = 'google-identity';
     const existingScript = document.getElementById(scriptId) as HTMLScriptElement | null;
@@ -40,7 +42,7 @@ export function GoogleLoginButton({ onSuccess }: GoogleLoginButtonProps) {
       if (initialized.current || !window.google?.accounts?.id || !containerRef.current) return;
 
       window.google.accounts.id.initialize({
-        client_id: clientId!,
+        client_id: safeClientId,
         callback: async (response) => {
           if (!response.credential) return;
           setIsLoading(true);

@@ -16,7 +16,7 @@ export const corsMiddleware: MiddlewareHandler = async (c, next) => {
   }
 
   if (isProduction && configuredOrigin && requestOrigin && requestOrigin !== configuredOrigin) {
-    return new Response(null, { status: 403 });
+    return c.json(createError('FORBIDDEN', 'Origin not allowed'), 403);
   }
 
   const allowedOrigin = configuredOrigin ?? requestOrigin ?? '*';

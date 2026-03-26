@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { Badge } from '@/components/ui/Badge';
-import { cn } from '@/lib/utils';
+import { cn, getInitials } from '@/lib/utils';
 
 export function ProfilePage() {
   const { user, updateProfile, logout, isAuthenticated } = useAuthStore();
@@ -62,7 +62,7 @@ export function ProfilePage() {
       <div className="max-w-3xl mx-auto space-y-8">
         <header className="flex items-center gap-4">
           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-crown-500 text-white text-xl font-semibold uppercase">
-            {user.name.slice(0, 1)}
+            {getInitials(user.name)}
           </span>
           <div>
             <h1 className="text-3xl font-bold text-throne-900 flex items-center gap-2">

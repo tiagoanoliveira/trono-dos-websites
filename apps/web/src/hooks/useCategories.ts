@@ -12,7 +12,7 @@ function normalizeCategory(category: ApiCategory): Category {
   return {
     ...rest,
     websiteCount: website_count ?? 0,
-    children: children?.map(normalizeCategory),
+    children: children?.map(normalizeCategory) ?? [],
   };
 }
 

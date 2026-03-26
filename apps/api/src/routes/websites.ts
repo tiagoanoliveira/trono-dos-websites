@@ -75,6 +75,13 @@ type CommentNode = {
   replies: CommentNode[];
 };
 
+type CommentSort = 'newest' | 'oldest';
+
+const COMMENT_SORT_ORDER: Record<CommentSort, string> = {
+  newest: 'c.created_at DESC',
+  oldest: 'c.created_at ASC',
+};
+
 export const websitesRouter = new Hono<{ Bindings: Env } & AuthContext>();
 
 websitesRouter.get('/', async (c) => {
@@ -273,7 +280,8 @@ websitesRouter.get('/:id/comments', optionalAuth, async (c) => {
     const { id } = c.req.param();
     const url = new URL(c.req.url);
     const sortParam = url.searchParams.get('sort');
-    const orderClause = sortParam === 'oldest' ? 'c.created_at ASC' : 'c.created_at DESC';
+    const sort: CommentSort = sortParam === 'oldest' ? 'oldest' : 'newest';
+    const orderClause = COMMENT_SORT_ORDER[sort];
 
     const rows = await c.env.DB.prepare(
       `SELECT

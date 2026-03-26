@@ -19,7 +19,7 @@ export function WebsitePage() {
   const { isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [userRating, setUserRating] = useState<number>(website?.user_rating ?? 0);
+  const [userRating, setUserRating] = useState<number>(0);
 
   const { comments, isLoading: commentsLoading } = useComments(id);
   const addCommentMutation = useAddComment(id);
