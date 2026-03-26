@@ -16,7 +16,3 @@ ENVIRONMENT = "development"
 JWT_SECRET = "change-me-in-production"
 GOOGLE_CLIENT_ID = ""
 GOOGLE_CLIENT_SECRET = ""
-
-[[migrations]]
-tag = "v1"
-new_classes = ["TronoAPI"]
