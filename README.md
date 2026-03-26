@@ -156,7 +156,7 @@ CREATE TABLE category_suggestions (
 - [x] Registo com email/password
 - [x] Login com email/password
 - [ ] Login com Google OAuth
-- [ ] Gestão de sessões (JWT + cookies) — atualmente JWT em localStorage; cookies por configurar
+- [ ] Gestão de sessões (JWT + cookies) — atualmente JWT em localStorage (risco de XSS); migrar para cookies httpOnly
 - [ ] Página de perfil do utilizador
 - [x] Recuperação de password
 ### Fase 3 — Interação Básica 
@@ -260,7 +260,7 @@ npm run db:migrate
 
 ### API (Workers + D1)
 1. Instalar dependências: `npm install`
-2. Criar a base D1: `cd apps/api && wrangler d1 create trono-db` e atualizar o `database_id` em `apps/api/wrangler.toml`.
+2. Criar a base D1: `cd apps/api && wrangler d1 create trono-db` e atualizar o `database_id` em `apps/api/wrangler.toml` (o worker está nomeado como `trono-api` nesse ficheiro).
 3. Aplicar migrações: `npm run db:migrate` (executa `wrangler d1 migrations apply trono-db`).
 4. Segredos e variáveis:
    - `wrangler secret put JWT_SECRET`
@@ -274,6 +274,6 @@ npm run db:migrate
 3. Build command: `npm run build --workspace=apps/web`
 4. Output directory: `apps/web/dist`
 5. Node version: 18+
-6. Rota / binding para API: em Pages > Functions/Routes, criar rota `/api/*` apontando para o worker `trono-api` (Workers for Pages). Assim o frontend continua a chamar `/api` como já configurado no Vite.
+6. Rota / binding para API: em Pages > Functions/Routes, criar rota `/api/*` apontando para o worker `trono-api` (nome definido em `apps/api/wrangler.toml`). Assim o frontend continua a chamar `/api` como já configurado no Vite.
 
 > Dica: em produção não deixar `JWT_SECRET` no `wrangler.toml`; usar apenas `wrangler secret`.
