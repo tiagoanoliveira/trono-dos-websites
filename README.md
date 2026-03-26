@@ -146,48 +146,48 @@ CREATE TABLE category_suggestions (
 
 ## Funcionalidades por Fase
 ### Fase 1 — Fundação
- Setup do projeto (Vite + React + TypeScript + Tailwind)
- Configuração Cloudflare Pages + Workers + D1
- Layout base (header, footer, navegação)
- Página inicial com listagem de categorias
- Página de categoria com listagem de websites
- Página de detalhe do website
+- Setup do projeto (Vite + React + TypeScript + Tailwind)
+- Configuração Cloudflare Pages + Workers + D1
+- Layout base (header, footer, navegação)
+- Página inicial com listagem de categorias
+- Página de categoria com listagem de websites
+- Página de detalhe do website
 ### Fase 2 — Autenticação
- Registo com email/password
- Login com email/password
- Login com Google OAuth
- Gestão de sessões (JWT + cookies)
- Página de perfil do utilizador
- Recuperação de password
+- Registo com email/password
+- Login com email/password
+- Login com Google OAuth
+- Gestão de sessões (JWT + cookies)
+- Página de perfil do utilizador
+- Recuperação de password
 ### Fase 3 — Interação Básica 
- Sistema de avaliação (1-5 estrelas)
- Comentários em websites
- Respostas a comentários (threading)
- Ordenação por avaliação/data/popularidade
+- Sistema de avaliação (1-5 estrelas)
+- Comentários em websites
+- Respostas a comentários (threading)
+- Ordenação por avaliação/data/popularidade
 ### Fase 4 — Contribuições 
- Formulário para propor novo website
- Formulário para sugerir nova categoria
- Painel de "minhas contribuições"
- Notificações de estado (aprovado/rejeitado)
+- Formulário para propor novo website
+- Formulário para sugerir nova categoria
+- Painel de "minhas contribuições"
+- Notificações de estado (aprovado/rejeitado)
 ### Fase 5 — Comparativos Diários
- Geração automática de comparativos (Cron via Workers)
- Página do comparativo do dia
- Sistema de votação
- Histórico de comparativos passados
- Estatísticas de vitórias por website
+- Geração automática de comparativos (Cron via Workers)
+- Página do comparativo do dia
+- Sistema de votação
+- Histórico de comparativos passados
+- Estatísticas de vitórias por website
 ### Fase 6 — Moderação
- Sistema de denúncias
- Painel de administração
- Aprovação/rejeição de websites
- Aprovação/rejeição de categorias
- Gestão de denúncias
- Gestão de utilizadores
+- Sistema de denúncias
+- Painel de administração
+- Aprovação/rejeição de websites
+- Aprovação/rejeição de categorias
+- Gestão de denúncias
+- Gestão de utilizadores
 ### Fase 7 — Refinamentos
- Pesquisa global (websites + categorias)
- Filtros avançados
- SEO (meta tags, sitemap, structured data)
- Performance (lazy loading, caching)
- PWA básico
+- Pesquisa global (websites + categorias)
+- Filtros avançados
+- SEO (meta tags, sitemap, structured data)
+- Performance (lazy loading, caching)
+- PWA básico
 
  ## Estrutura de pastas
 
