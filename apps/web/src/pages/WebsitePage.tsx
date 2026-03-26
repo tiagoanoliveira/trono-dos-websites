@@ -284,7 +284,7 @@ function RatingSection({
             {ratingCount > 0 ? `Média baseada em ${ratingCount} avaliação${ratingCount > 1 ? 's' : ''}.` : 'Sê o primeiro a avaliar este website.'}
           </p>
         </div>
-        <StarRating score={avgRating ?? 0} count={ratingCount} size="md" />
+        <StarRating score={avgRating} count={ratingCount} size="md" />
       </div>
 
       {isAuthenticated ? (

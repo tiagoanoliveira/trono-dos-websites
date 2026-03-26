@@ -47,7 +47,7 @@ const MIN_COMMENT_LENGTH = 3;
 const MAX_COMMENT_LENGTH = 1000;
 
 function isValidSort(value: string | null): value is SortOption {
-  return !!value && value in SORT_MAP;
+  return typeof value === 'string' && value in SORT_MAP;
 }
 
 type CommentRow = {

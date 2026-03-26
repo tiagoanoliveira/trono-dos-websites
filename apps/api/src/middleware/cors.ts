@@ -13,7 +13,7 @@ export const corsMiddleware: MiddlewareHandler = async (c, next) => {
 
   if (isProduction && !configuredOrigin) {
     return c.json(
-      createError('CONFIG_ERROR', 'Configure FRONTEND_ORIGIN no ambiente de produção (Cloudflare Worker)'),
+      createError('CONFIG_ERROR', 'Set FRONTEND_ORIGIN in production (Cloudflare Worker environment variable)'),
       500,
     );
   }

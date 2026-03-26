@@ -275,4 +275,4 @@ npm run db:migrate
 5. Node version: 18+
 6. Rota / binding para API: em Pages > Functions/Routes, criar rota `/api/*` apontando para o worker `trono-api` (nome definido em `apps/api/wrangler.toml`). Assim o frontend continua a chamar `/api` como já configurado no Vite.
 
-> Dica: em produção não deixar `JWT_SECRET` no `wrangler.toml`; usar apenas `wrangler secret`.
+> Tip: in production, don't keep `JWT_SECRET` in `wrangler.toml`; use `wrangler secret` only.
