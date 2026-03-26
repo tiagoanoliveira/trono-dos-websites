@@ -160,7 +160,7 @@ INSERT INTO websites (id, name, url, description, category_id, status, featured)
   -- Tecnologia: Desenvolvimento
   ('web-github-000001', 'GitHub', 'https://www.github.com', 'Plataforma de alojamento de código e controlo de versões Git', 'sub-desenvolvimento-1', 'approved', TRUE),
   ('web-codepen-000001', 'CodePen', 'https://codepen.io', 'Ambiente de desenvolvimento online para HTML, CSS e JavaScript', 'sub-desenvolvimento-1', 'approved', FALSE),
-  ('web-sapo-pt-000001', 'SAPO', 'https://www.sapo.pt', 'Portal de internet português com notícias, email e serviços', 'sub-ia-00000000001', 'approved', FALSE),
+  ('web-sapo-pt-000001', 'SAPO', 'https://www.sapo.pt', 'Portal de internet português com notícias, email e serviços', 'sub-produtividade-01', 'approved', FALSE),
 
   -- Tecnologia: IA
   ('web-chatgpt-000001', 'ChatGPT', 'https://chatgpt.com', 'Assistente de inteligência artificial da OpenAI', 'sub-ia-00000000001', 'approved', TRUE),
