@@ -12,6 +12,7 @@ Plataforma colaborativa que reúne as melhores ferramentas e websites para portu
 
 ## 📦 Estrutura
 
+```bash
 ┌─────────────────────────────────────────────────────────┐
 │                    Cloudflare Pages                      │
 │                  (Frontend - React + Tailwind)           │
@@ -29,6 +30,7 @@ Plataforma colaborativa que reúne as melhores ferramentas e websites para portu
 │      D1       │ │      R2       │ │      KV       │
 │  (Database)   │ │   (Assets)    │ │   (Cache)     │
 └───────────────┘ └───────────────┘ └───────────────┘
+```
 ## Base de Dados
 
 ```sql
