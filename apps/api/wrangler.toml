@@ -13,6 +13,8 @@ database_id = "YOUR_DATABASE_ID"
 ENVIRONMENT = "development"
 # Do NOT set JWT_SECRET here for production — use: wrangler secret put JWT_SECRET
 JWT_SECRET = "change-me-in-production"
+GOOGLE_CLIENT_ID = ""
+GOOGLE_CLIENT_SECRET = ""
 
 [[migrations]]
 tag = "v1"

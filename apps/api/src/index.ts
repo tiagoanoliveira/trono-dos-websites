@@ -2,11 +2,14 @@ import { Hono } from 'hono';
 import { corsMiddleware } from './middleware/cors';
 import { categoriesRouter } from './routes/categories';
 import { websitesRouter } from './routes/websites';
+import { authRouter } from './routes/auth';
 
 export type Env = {
   DB: D1Database;
   JWT_SECRET: string;
   ENVIRONMENT: string;
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
 };
 
 const app = new Hono<{ Bindings: Env }>();
@@ -24,6 +27,7 @@ app.get('/api/health', (c) => {
   });
 });
 
+app.route('/api/auth', authRouter);
 app.route('/api/categories', categoriesRouter);
 app.route('/api/websites', websitesRouter);
 
