@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-type ForgotPasswordResponse = { message?: string; token?: string };
+type ForgotPasswordResponse = { message?: string };
 
 export function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
