@@ -12,7 +12,4 @@ migrations_dir = "../../migrations"
 
 [vars]
 ENVIRONMENT = "production"
-# Do NOT set JWT_SECRET here for production — use: wrangler secret put JWT_SECRET
-JWT_SECRET = "acee318f976f9cdc335ff863005aedb74edd8a14dc2e3e5516cc3a9147d2dc28"
-GOOGLE_CLIENT_ID = ""
-GOOGLE_CLIENT_SECRET = ""
+
