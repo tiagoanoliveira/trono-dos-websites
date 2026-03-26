@@ -239,7 +239,6 @@ CREATE TABLE category_suggestions (
 |Lazer	|Streaming, Eventos, Restaurantes, Viagens|
 |Serviços Públicos	|Governo, Finanças, Segurança Social, Justiça|
 |Compras	|Comparadores, Promoções, Marketplaces, Cashback|
-
 ## 🛠️ Desenvolvimento
 
 ```bash

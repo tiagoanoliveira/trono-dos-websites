@@ -41,8 +41,13 @@ const SORT_MAP: Record<SortOption, string> = {
   featured: 'w.featured DESC, avg_rating DESC NULLS LAST, w.created_at DESC',
 };
 
+const MIN_RATING = 1;
+const MAX_RATING = 5;
+const MIN_COMMENT_LENGTH = 3;
+const MAX_COMMENT_LENGTH = 1000;
+
 function isValidSort(value: string | null): value is SortOption {
-  return value === 'rating' || value === 'recent' || value === 'featured' || value === 'date' || value === 'popularity';
+  return !!value && value in SORT_MAP;
 }
 
 type CommentRow = {
@@ -239,8 +244,16 @@ websitesRouter.post('/:id/ratings', requireAuth, async (c) => {
     }
 
     const { score } = body;
-    if (typeof score !== 'number' || !Number.isInteger(score) || score < 1 || score > 5) {
-      return c.json(createError('VALIDATION_ERROR', 'Avaliação deve ser um número entre 1 e 5'), 400);
+    if (
+      typeof score !== 'number' ||
+      !Number.isInteger(score) ||
+      score < MIN_RATING ||
+      score > MAX_RATING
+    ) {
+      return c.json(
+        createError('VALIDATION_ERROR', `Avaliação deve ser um número entre ${MIN_RATING} e ${MAX_RATING}`),
+        400,
+      );
     }
 
     await c.env.DB.prepare(
@@ -354,9 +367,16 @@ websitesRouter.post('/:id/comments', requireAuth, async (c) => {
     }
 
     const { content, parentId } = body;
-    if (typeof content !== 'string' || content.trim().length < 3 || content.trim().length > 1000) {
+    if (
+      typeof content !== 'string' ||
+      content.trim().length < MIN_COMMENT_LENGTH ||
+      content.trim().length > MAX_COMMENT_LENGTH
+    ) {
       return c.json(
-        createError('VALIDATION_ERROR', 'Comentário deve ter entre 3 e 1000 caracteres'),
+        createError(
+          'VALIDATION_ERROR',
+          `Comentário deve ter entre ${MIN_COMMENT_LENGTH} e ${MAX_COMMENT_LENGTH} caracteres`,
+        ),
         400,
       );
     }

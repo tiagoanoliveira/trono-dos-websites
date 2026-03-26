@@ -28,18 +28,20 @@ export function GoogleLoginButton({ onSuccess }: GoogleLoginButtonProps) {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
   useEffect(() => {
-    const envClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    if (typeof envClientId !== 'string' || envClientId.length === 0) {
+    if (typeof clientId !== 'string' || clientId.length === 0) {
       setError('Configuração Google em falta');
       return;
     }
-    const safeClientId = envClientId;
+
+    const safeClientId = clientId;
 
     const scriptId = 'google-identity';
     const existingScript = document.getElementById(scriptId) as HTMLScriptElement | null;
 
     function initClient() {
-      if (initialized.current || !window.google?.accounts?.id || !containerRef.current) return;
+      if (initialized.current) return;
+      if (!window.google?.accounts?.id) return;
+      if (!containerRef.current) return;
 
       window.google.accounts.id.initialize({
         client_id: safeClientId,

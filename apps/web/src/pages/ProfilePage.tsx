@@ -13,6 +13,15 @@ export function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const navigate = useNavigate();
 
+  const isValidAvatarUrl = (value: string) => {
+    try {
+      new URL(value);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   useEffect(() => {
     setName(user?.name ?? '');
     setAvatar(user?.avatar_url ?? '');
@@ -44,6 +53,10 @@ export function ProfilePage() {
     setError('');
     if (!name.trim()) {
       setError('O nome é obrigatório');
+      return;
+    }
+    if (avatar && !isValidAvatarUrl(avatar)) {
+      setError('URL de avatar inválida');
       return;
     }
     setIsSaving(true);
