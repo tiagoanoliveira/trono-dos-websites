@@ -4,15 +4,14 @@ const API_BASE = '/api';
 
 class ApiClient {
   private baseUrl: string;
-  private token: string | null = null;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
   }
 
-  setToken(token: string | null) {
-    this.token = token;
-  }
+  // Legacy noop kept for compatibility with old callers
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  setToken(_token: string | null) {}
 
   private async request<T>(
     endpoint: string,
@@ -23,14 +22,11 @@ class ApiClient {
       ...options.headers,
     };
 
-    if (this.token) {
-      (headers as Record<string, string>)['Authorization'] = `Bearer ${this.token}`;
-    }
-
     try {
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         ...options,
         headers,
+        credentials: 'include',
       });
 
       const data = await response.json();

@@ -7,11 +7,12 @@ import { WebsiteCard } from '@/components/features/WebsiteCard';
 import { useCategoryBySlug } from '@/hooks/useCategories';
 import { useWebsites, type WebsiteFilters } from '@/hooks/useWebsites';
 
-type SortOption = 'rating' | 'recent' | 'featured';
+type SortOption = 'rating' | 'date' | 'popularity' | 'featured';
 
 const sortOptions: { value: SortOption; label: string }[] = [
   { value: 'rating', label: 'Melhor avaliação' },
-  { value: 'recent', label: 'Mais recentes' },
+  { value: 'date', label: 'Mais recentes' },
+  { value: 'popularity', label: 'Mais populares' },
   { value: 'featured', label: 'Em destaque' },
 ];
 

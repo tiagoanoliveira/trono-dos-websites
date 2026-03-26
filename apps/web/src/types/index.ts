@@ -24,6 +24,8 @@ export interface Website {
   featured: boolean;
   avg_rating?: number;
   rating_count?: number;
+  user_rating?: number | null;
+  comment_count?: number;
   created_at: string;
 }
 
@@ -37,4 +39,21 @@ export interface PaginatedResponse<T> {
     hasNextPage: boolean;
     hasPrevPage: boolean;
   };
+}
+
+export interface Comment {
+  id: string;
+  website_id: string;
+  user_id: string;
+  content: string;
+  parent_id: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  user: {
+    id: string;
+    name: string;
+    avatar_url: string | null;
+  };
+  replies: Comment[];
 }

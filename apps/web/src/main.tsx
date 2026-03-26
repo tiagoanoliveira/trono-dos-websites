@@ -15,7 +15,7 @@ const queryClient = new QueryClient({
   },
 });
 
-// Initialize auth from stored token before first render
+// Initialize auth session (cookie-based) before first render
 useAuthStore.getState().initialize();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

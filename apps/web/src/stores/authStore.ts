@@ -11,7 +11,6 @@ export interface AuthUser {
 
 interface AuthState {
   user: AuthUser | null;
-  token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
 
@@ -19,33 +18,25 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (idToken: string) => Promise<void>;
   register: (email: string, name: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   updateProfile: (data: { name?: string; avatar_url?: string }) => Promise<void>;
 }
 
-const TOKEN_KEY = 'trono-token';
-
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  token: null,
   isLoading: false,
   isAuthenticated: false,
 
   initialize: async () => {
-    const stored = localStorage.getItem(TOKEN_KEY);
-    if (!stored) return;
-    api.setToken(stored);
     try {
       const res = await api.get<AuthUser>('/auth/me');
       if (res.success && res.data) {
-        set({ user: res.data, token: stored, isAuthenticated: true });
+        set({ user: res.data, isAuthenticated: true });
       } else {
-        localStorage.removeItem(TOKEN_KEY);
-        api.setToken(null);
+        set({ user: null, isAuthenticated: false });
       }
     } catch {
-      localStorage.removeItem(TOKEN_KEY);
-      api.setToken(null);
+      set({ user: null, isAuthenticated: false });
     }
   },
 
@@ -59,10 +50,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (!res.success || !res.data) {
         throw new Error(res.error?.message ?? 'Erro ao entrar');
       }
-      const { token, user } = res.data;
-      localStorage.setItem(TOKEN_KEY, token);
-      api.setToken(token);
-      set({ user, token, isAuthenticated: true });
+      const { user } = res.data;
+      set({ user, isAuthenticated: true });
     } finally {
       set({ isLoading: false });
     }
@@ -75,10 +64,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (!res.success || !res.data) {
         throw new Error(res.error?.message ?? 'Erro ao entrar com Google');
       }
-      const { token, user } = res.data;
-      localStorage.setItem(TOKEN_KEY, token);
-      api.setToken(token);
-      set({ user, token, isAuthenticated: true });
+      const { user } = res.data;
+      set({ user, isAuthenticated: true });
     } finally {
       set({ isLoading: false });
     }
@@ -95,19 +82,16 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (!res.success || !res.data) {
         throw new Error(res.error?.message ?? 'Erro ao criar conta');
       }
-      const { token, user } = res.data;
-      localStorage.setItem(TOKEN_KEY, token);
-      api.setToken(token);
-      set({ user, token, isAuthenticated: true });
+      const { user } = res.data;
+      set({ user, isAuthenticated: true });
     } finally {
       set({ isLoading: false });
     }
   },
 
-  logout: () => {
-    localStorage.removeItem(TOKEN_KEY);
-    api.setToken(null);
-    set({ user: null, token: null, isAuthenticated: false });
+  logout: async () => {
+    await api.post('/auth/logout');
+    set({ user: null, isAuthenticated: false });
   },
 
   updateProfile: async (data) => {
