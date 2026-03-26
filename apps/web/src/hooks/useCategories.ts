@@ -11,7 +11,7 @@ function normalizeCategory(category: ApiCategory): Category {
   const { website_count, children, ...rest } = category;
   return {
     ...rest,
-    websiteCount: website_count ?? undefined,
+    websiteCount: website_count ?? 0,
     children: children?.map(normalizeCategory),
   };
 }
@@ -21,10 +21,10 @@ export function useCategories() {
     queryKey: ['categories'],
     queryFn: async () => {
       const response = await api.get<ApiCategory[]>('/categories');
-      if (!response.success) {
+      if (!response.success || !response.data) {
         throw new Error(response.error?.message || 'Erro ao carregar categorias');
       }
-      return response.data?.map(normalizeCategory) ?? [];
+      return response.data.map(normalizeCategory);
     },
   });
 
@@ -40,10 +40,10 @@ export function useCategoryBySlug(slug: string) {
     queryKey: ['categories', slug],
     queryFn: async () => {
       const response = await api.get<ApiCategory>(`/categories/${slug}`);
-      if (!response.success) {
+      if (!response.success || !response.data) {
         throw new Error(response.error?.message || 'Categoria não encontrada');
       }
-      return response.data ? normalizeCategory(response.data) : undefined;
+      return normalizeCategory(response.data);
     },
     enabled: !!slug,
   });
