@@ -3,11 +3,22 @@ import type { MiddlewareHandler } from 'hono';
 const ALLOWED_METHODS = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
 const ALLOWED_HEADERS = 'Content-Type, Authorization';
 
-// Allows credentialed requests (cookies). In production, set FRONTEND_ORIGIN
-// to your Pages domain (e.g. https://trono-dos-websites.pages.dev).
+// Allows credentialed requests (cookies). In production, FRONTEND_ORIGIN must
+// be set to your Pages domain (e.g. https://trono-dos-websites.pages.dev).
 export const corsMiddleware: MiddlewareHandler = async (c, next) => {
+  const isProduction = c.env.ENVIRONMENT === 'production';
   const requestOrigin = c.req.header('Origin');
-  const allowedOrigin = c.env.FRONTEND_ORIGIN || requestOrigin || '*';
+  const configuredOrigin = c.env.FRONTEND_ORIGIN;
+
+  if (isProduction && !configuredOrigin) {
+    return new Response('FRONTEND_ORIGIN not configured', { status: 500 });
+  }
+
+  if (isProduction && configuredOrigin && requestOrigin && requestOrigin !== configuredOrigin) {
+    return new Response(null, { status: 403 });
+  }
+
+  const allowedOrigin = configuredOrigin ?? requestOrigin ?? '*';
 
   c.header('Access-Control-Allow-Origin', allowedOrigin);
   c.header('Vary', 'Origin');

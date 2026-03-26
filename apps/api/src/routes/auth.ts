@@ -18,7 +18,6 @@ type DbUser = {
 };
 
 const JWT_EXPIRES = 604800; // 7 days
-const COOKIE_MAX_AGE = JWT_EXPIRES;
 
 function formatUser(user: DbUser) {
   return {
@@ -97,7 +96,7 @@ authRouter.post('/register', async (c) => {
     JWT_EXPIRES,
   );
 
-  c.header('Set-Cookie', buildAuthCookie(token, c.env.ENVIRONMENT, COOKIE_MAX_AGE));
+  c.header('Set-Cookie', buildAuthCookie(token, c.env.ENVIRONMENT, JWT_EXPIRES));
   return c.json(createSuccess({ token, user: formatUser(user) }), 201);
 });
 
@@ -134,7 +133,7 @@ authRouter.post('/login', async (c) => {
     JWT_EXPIRES,
   );
 
-  c.header('Set-Cookie', buildAuthCookie(token, c.env.ENVIRONMENT, COOKIE_MAX_AGE));
+  c.header('Set-Cookie', buildAuthCookie(token, c.env.ENVIRONMENT, JWT_EXPIRES));
   return c.json(createSuccess({ token, user: formatUser(user) }));
 });
 
@@ -369,6 +368,6 @@ authRouter.post('/google', async (c) => {
     JWT_EXPIRES,
   );
 
-  c.header('Set-Cookie', buildAuthCookie(token, c.env.ENVIRONMENT, COOKIE_MAX_AGE));
+  c.header('Set-Cookie', buildAuthCookie(token, c.env.ENVIRONMENT, JWT_EXPIRES));
   return c.json(createSuccess({ token, user: formatUser(user) }));
 });

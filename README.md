@@ -155,15 +155,15 @@ CREATE TABLE category_suggestions (
 ### Fase 2 — Autenticação
 - [x] Registo com email/password
 - [x] Login com email/password
-- [ ] Login com Google OAuth
-- [ ] Gestão de sessões (JWT + cookies) — atualmente JWT em localStorage (risco de XSS); migrar para cookies httpOnly
-- [ ] Página de perfil do utilizador
+- [x] Login com Google OAuth
+- [x] Gestão de sessões (JWT + cookies) — migrado para cookies httpOnly
+- [x] Página de perfil do utilizador
 - [x] Recuperação de password
 ### Fase 3 — Interação Básica 
-- [ ] Sistema de avaliação (1-5 estrelas) — placeholders no UI
-- [ ] Comentários em websites — placeholders no UI
-- [ ] Respostas a comentários (threading)
-- [ ] Ordenação por avaliação/data/popularidade
+- [x] Sistema de avaliação (1-5 estrelas)
+- [x] Comentários em websites
+- [x] Respostas a comentários (threading)
+- [x] Ordenação por avaliação/data/popularidade
 ### Fase 4 — Contribuições 
 - [ ] Formulário para propor novo website
 - [ ] Formulário para sugerir nova categoria

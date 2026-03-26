@@ -102,11 +102,11 @@ export function ProfilePage() {
                 <label className="label">Avatar (URL opcional)</label>
                 <input
                   type="url"
-                  value={avatar ?? ''}
-                  onChange={(e) => setAvatar(e.target.value)}
-                  className="input"
-                  placeholder="https://..."
-                />
+                value={avatar ?? ''}
+                onChange={(e) => setAvatar(e.target.value)}
+                className="input"
+                placeholder="https://..."
+              />
                 <p className="text-xs text-throne-400 mt-1">Se vazio, usamos uma letra do teu nome.</p>
               </div>
               <div>
@@ -145,10 +145,6 @@ export function ProfilePage() {
               </p>
               <p>
                 <span className="font-semibold">Email:</span> {user.email}
-              </p>
-              <p>
-                <span className="font-semibold">Autenticado via:</span>{' '}
-                {user.avatar_url ? 'Google/Avatar' : 'Email/Password'}
               </p>
             </div>
             <button

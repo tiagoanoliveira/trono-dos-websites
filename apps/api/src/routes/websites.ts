@@ -148,7 +148,8 @@ websitesRouter.get('/:id', optionalAuth, async (c) => {
   try {
     const { id } = c.req.param();
     const userId = c.get('userId');
-    const userIdBinding = userId ?? '';
+    const userRatingSelect = userId ? 'ur.score AS user_rating' : 'NULL AS user_rating';
+    const userRatingJoin = userId ? 'LEFT JOIN ratings ur ON ur.website_id = w.id AND ur.user_id = ?' : '';
 
     const website = await c.env.DB.prepare(
       `SELECT
@@ -157,12 +158,12 @@ websitesRouter.get('/:id', optionalAuth, async (c) => {
          w.status, w.featured, w.created_at, w.updated_at,
          AVG(CAST(r.score AS REAL)) AS avg_rating,
          COALESCE(COUNT(r.id), 0) AS rating_count,
-         ur.score AS user_rating,
+         ${userRatingSelect},
          COALESCE(cmt.comment_count, 0) AS comment_count
        FROM websites w
        LEFT JOIN categories cat ON cat.id = w.category_id
        LEFT JOIN ratings r ON r.website_id = w.id
-       LEFT JOIN ratings ur ON ur.website_id = w.id AND ur.user_id = ?
+       ${userRatingJoin}
        LEFT JOIN (
          SELECT website_id, COUNT(*) AS comment_count
          FROM comments
@@ -172,7 +173,7 @@ websitesRouter.get('/:id', optionalAuth, async (c) => {
        WHERE w.id = ? AND w.status = 'approved'
        GROUP BY w.id`,
     )
-      .bind(userIdBinding, id)
+      .bind(...(userId ? [userId, id] as const : [id]))
       .first<WebsiteRow>();
 
     if (!website) {
