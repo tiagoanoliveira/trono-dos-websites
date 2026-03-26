@@ -102,7 +102,7 @@ export function ProfilePage() {
                 <label className="label">Avatar (URL opcional)</label>
                 <input
                   type="url"
-                value={avatar ?? ''}
+                  value={avatar}
                 onChange={(e) => setAvatar(e.target.value)}
                 className="input"
                 placeholder="https://..."

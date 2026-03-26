@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from 'hono';
+import { createError } from '../utils/helpers';
 
 const ALLOWED_METHODS = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
 const ALLOWED_HEADERS = 'Content-Type, Authorization';
@@ -11,7 +12,7 @@ export const corsMiddleware: MiddlewareHandler = async (c, next) => {
   const configuredOrigin = c.env.FRONTEND_ORIGIN;
 
   if (isProduction && !configuredOrigin) {
-    return new Response('FRONTEND_ORIGIN not configured', { status: 500 });
+    return c.json(createError('CONFIG_ERROR', 'FRONTEND_ORIGIN not configured'), 500);
   }
 
   if (isProduction && configuredOrigin && requestOrigin && requestOrigin !== configuredOrigin) {

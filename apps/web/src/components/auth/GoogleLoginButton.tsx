@@ -33,7 +33,6 @@ export function GoogleLoginButton({ onSuccess }: GoogleLoginButtonProps) {
       return;
     }
 
-    const clientIdValue = clientId;
     const scriptId = 'google-identity';
     const existingScript = document.getElementById(scriptId) as HTMLScriptElement | null;
 
@@ -41,7 +40,7 @@ export function GoogleLoginButton({ onSuccess }: GoogleLoginButtonProps) {
       if (initialized.current || !window.google?.accounts?.id || !containerRef.current) return;
 
       window.google.accounts.id.initialize({
-        client_id: clientIdValue,
+        client_id: clientId!,
         callback: async (response) => {
           if (!response.credential) return;
           setIsLoading(true);

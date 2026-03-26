@@ -534,14 +534,7 @@ function CommentItem({
 }
 
 function AvatarBubble({ name, avatarUrl }: { name: string; avatarUrl: string | null }) {
-  const parts = name.trim().split(/\s+/);
-  const initials = (
-    parts
-      .slice(0, 2)
-      .map((part) => part.charAt(0))
-      .join('') || name.slice(0, 2)
-  ).toUpperCase();
-
+  const initials = getInitials(name);
   if (avatarUrl) {
     return <img src={avatarUrl} alt={name} className="h-10 w-10 rounded-full object-cover border border-throne-200" />;
   }

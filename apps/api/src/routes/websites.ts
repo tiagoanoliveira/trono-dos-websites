@@ -148,33 +148,55 @@ websitesRouter.get('/:id', optionalAuth, async (c) => {
   try {
     const { id } = c.req.param();
     const userId = c.get('userId');
-    const userRatingSelect = userId ? 'ur.score AS user_rating' : 'NULL AS user_rating';
-    const userRatingJoin = userId ? 'LEFT JOIN ratings ur ON ur.website_id = w.id AND ur.user_id = ?' : '';
-
-    const website = await c.env.DB.prepare(
-      `SELECT
+    const selectBase = `
+      SELECT
          w.id, w.name, w.url, w.description, w.logo_url, w.screenshot_url,
          w.category_id, cat.name AS category_name, cat.slug AS category_slug,
          w.status, w.featured, w.created_at, w.updated_at,
          AVG(CAST(r.score AS REAL)) AS avg_rating,
          COALESCE(COUNT(r.id), 0) AS rating_count,
-         ${userRatingSelect},
          COALESCE(cmt.comment_count, 0) AS comment_count
+    `;
+
+    const joinsBase = `
        FROM websites w
        LEFT JOIN categories cat ON cat.id = w.category_id
        LEFT JOIN ratings r ON r.website_id = w.id
-       ${userRatingJoin}
        LEFT JOIN (
          SELECT website_id, COUNT(*) AS comment_count
          FROM comments
          WHERE status = 'visible'
          GROUP BY website_id
        ) cmt ON cmt.website_id = w.id
+    `;
+
+    const whereClause = `
        WHERE w.id = ? AND w.status = 'approved'
-       GROUP BY w.id`,
-    )
-      .bind(...(userId ? [userId, id] as const : [id]))
-      .first<WebsiteRow>();
+       GROUP BY w.id
+    `;
+
+    let website: WebsiteRow | undefined;
+
+    if (userId) {
+      website = await c.env.DB.prepare(
+        `${selectBase},
+         ur.score AS user_rating
+         ${joinsBase}
+         LEFT JOIN ratings ur ON ur.website_id = w.id AND ur.user_id = ?
+         ${whereClause}`,
+      )
+        .bind(userId, id)
+        .first<WebsiteRow>();
+    } else {
+      website = await c.env.DB.prepare(
+        `${selectBase},
+         NULL AS user_rating
+         ${joinsBase}
+         ${whereClause}`,
+      )
+        .bind(id)
+        .first<WebsiteRow>();
+    }
 
     if (!website) {
       return c.json(createError('NOT_FOUND', `Website '${id}' not found`), 404);
