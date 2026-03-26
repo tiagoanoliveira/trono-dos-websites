@@ -8,6 +8,7 @@ binding = "DB"
 database_name = "trono-db"
 # Replace YOUR_DATABASE_ID with the output of: wrangler d1 create trono-db
 database_id = "YOUR_DATABASE_ID"
+migrations_dir = "../../migrations"
 
 [vars]
 ENVIRONMENT = "development"
