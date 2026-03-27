@@ -10,6 +10,7 @@ export type Env = {
   ENVIRONMENT: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
+  FRONTEND_ORIGIN?: string;
 };
 
 const app = new Hono<{ Bindings: Env }>();

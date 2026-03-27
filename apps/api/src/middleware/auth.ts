@@ -1,6 +1,7 @@
 import type { Context, Next } from 'hono';
 import type { Env } from '../index';
 import { verifyJWT } from '../services/auth';
+import { readAuthCookie } from '../utils/authCookie';
 
 export type AuthContext = {
   Variables: {
@@ -10,16 +11,23 @@ export type AuthContext = {
   };
 };
 
+function extractToken(c: Context<{ Bindings: Env } & Partial<AuthContext>>): string | null {
+  const authorization = c.req.header('Authorization');
+  if (authorization && authorization.startsWith('Bearer ')) {
+    return authorization.slice(7);
+  }
+  return readAuthCookie(c.req.header('Cookie'));
+}
+
 export async function requireAuth(
   c: Context<{ Bindings: Env } & AuthContext>,
   next: Next,
 ): Promise<Response | void> {
-  const authorization = c.req.header('Authorization');
-  if (!authorization || !authorization.startsWith('Bearer ')) {
+  const token = extractToken(c);
+  if (!token) {
     return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Autenticação necessária' } }, 401);
   }
 
-  const token = authorization.slice(7);
   const payload = await verifyJWT(token, c.env.JWT_SECRET);
 
   if (!payload) {
@@ -37,9 +45,8 @@ export async function optionalAuth(
   c: Context<{ Bindings: Env } & AuthContext>,
   next: Next,
 ): Promise<Response | void> {
-  const authorization = c.req.header('Authorization');
-  if (authorization && authorization.startsWith('Bearer ')) {
-    const token = authorization.slice(7);
+  const token = extractToken(c);
+  if (token) {
     const payload = await verifyJWT(token, c.env.JWT_SECRET);
     if (payload) {
       c.set('userId', payload.sub as string);

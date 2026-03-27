@@ -146,48 +146,48 @@ CREATE TABLE category_suggestions (
 
 ## Funcionalidades por Fase
 ### Fase 1 — Fundação
-- Setup do projeto (Vite + React + TypeScript + Tailwind)
-- Configuração Cloudflare Pages + Workers + D1
-- Layout base (header, footer, navegação)
-- Página inicial com listagem de categorias
-- Página de categoria com listagem de websites
-- Página de detalhe do website
+- [x] Setup do projeto (Vite + React + TypeScript + Tailwind)
+- [x] Configuração Cloudflare Pages + Workers + D1
+- [x] Layout base (header, footer, navegação)
+- [x] Página inicial com listagem de categorias
+- [x] Página de categoria com listagem de websites
+- [x] Página de detalhe do website
 ### Fase 2 — Autenticação
-- Registo com email/password
-- Login com email/password
-- Login com Google OAuth
-- Gestão de sessões (JWT + cookies)
-- Página de perfil do utilizador
-- Recuperação de password
+- [x] Registo com email/password
+- [x] Login com email/password
+- [x] Login com Google OAuth
+- [x] Gestão de sessões (JWT + cookies) — migrado para cookies httpOnly
+- [x] Página de perfil do utilizador
+- [x] Recuperação de password
 ### Fase 3 — Interação Básica 
-- Sistema de avaliação (1-5 estrelas)
-- Comentários em websites
-- Respostas a comentários (threading)
-- Ordenação por avaliação/data/popularidade
+- [x] Sistema de avaliação (1-5 estrelas)
+- [x] Comentários em websites
+- [x] Respostas a comentários (threading)
+- [x] Ordenação por avaliação/data/popularidade
 ### Fase 4 — Contribuições 
-- Formulário para propor novo website
-- Formulário para sugerir nova categoria
-- Painel de "minhas contribuições"
-- Notificações de estado (aprovado/rejeitado)
+- [ ] Formulário para propor novo website
+- [ ] Formulário para sugerir nova categoria
+- [ ] Painel de "minhas contribuições"
+- [ ] Notificações de estado (aprovado/rejeitado)
 ### Fase 5 — Comparativos Diários
-- Geração automática de comparativos (Cron via Workers)
-- Página do comparativo do dia
-- Sistema de votação
-- Histórico de comparativos passados
-- Estatísticas de vitórias por website
+- [ ] Geração automática de comparativos (Cron via Workers)
+- [ ] Página do comparativo do dia
+- [ ] Sistema de votação
+- [ ] Histórico de comparativos passados
+- [ ] Estatísticas de vitórias por website
 ### Fase 6 — Moderação
-- Sistema de denúncias
-- Painel de administração
-- Aprovação/rejeição de websites
-- Aprovação/rejeição de categorias
-- Gestão de denúncias
-- Gestão de utilizadores
+- [ ] Sistema de denúncias
+- [ ] Painel de administração
+- [ ] Aprovação/rejeição de websites
+- [ ] Aprovação/rejeição de categorias
+- [ ] Gestão de denúncias
+- [ ] Gestão de utilizadores
 ### Fase 7 — Refinamentos
-- Pesquisa global (websites + categorias)
-- Filtros avançados
-- SEO (meta tags, sitemap, structured data)
-- Performance (lazy loading, caching)
-- PWA básico
+- [ ] Pesquisa global (websites + categorias)
+- [ ] Filtros avançados
+- [ ] SEO (meta tags, sitemap, structured data)
+- [ ] Performance (lazy loading, caching)
+- [ ] PWA básico
 
  ## Estrutura de pastas
 
@@ -239,7 +239,6 @@ CREATE TABLE category_suggestions (
 |Lazer	|Streaming, Eventos, Restaurantes, Viagens|
 |Serviços Públicos	|Governo, Finanças, Segurança Social, Justiça|
 |Compras	|Comparadores, Promoções, Marketplaces, Cashback|
- 
 ## 🛠️ Desenvolvimento
 
 ```bash
@@ -254,3 +253,26 @@ npm run dev:api
 
 # Correr migrações
 npm run db:migrate
+```
+
+## 🚀 Deploy na Cloudflare
+
+### API (Workers + D1)
+1. Instalar dependências: `npm install`
+2. Criar a base D1: `cd apps/api && wrangler d1 create trono-db` e atualizar o `database_id` em `apps/api/wrangler.toml` (o nome do worker nesse ficheiro é `trono-api`).
+3. Aplicar migrações: `npm run db:migrate` (executa `wrangler d1 migrations apply trono-db`).
+4. Segredos e variáveis:
+   - `wrangler secret put JWT_SECRET`
+   - Opcional: `wrangler secret put GOOGLE_CLIENT_ID` e `wrangler secret put GOOGLE_CLIENT_SECRET`
+   - Ajustar `ENVIRONMENT` para `production` em `wrangler.toml` ou via `--var ENVIRONMENT=production`
+5. Deploy do worker: `npm run deploy` (ou `wrangler deploy` dentro de `apps/api`).
+
+### Frontend (Cloudflare Pages)
+1. Criar projeto Pages a partir do repositório.
+2. Instalação: `npm install`
+3. Build command: `npm run build --workspace=apps/web`
+4. Output directory: `apps/web/dist`
+5. Node version: 18+
+6. Rota / binding para API: em Pages > Functions/Routes, criar rota `/api/*` apontando para o worker `trono-api` (nome definido em `apps/api/wrangler.toml`). Assim o frontend continua a chamar `/api` como já configurado no Vite.
+
+> Tip: in production, don't keep `JWT_SECRET` in `wrangler.toml`; use `wrangler secret` only.

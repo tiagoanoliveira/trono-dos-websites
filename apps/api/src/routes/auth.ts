@@ -3,6 +3,7 @@ import type { Env } from '../index';
 import { hashPassword, verifyPassword, createJWT } from '../services/auth';
 import { generateId, createSuccess, createError } from '../utils/helpers';
 import { requireAuth, type AuthContext } from '../middleware/auth';
+import { buildAuthCookie, clearAuthCookie } from '../utils/authCookie';
 
 type DbUser = {
   id: string;
@@ -95,6 +96,7 @@ authRouter.post('/register', async (c) => {
     JWT_EXPIRES,
   );
 
+  c.header('Set-Cookie', buildAuthCookie(token, c.env.ENVIRONMENT, JWT_EXPIRES));
   return c.json(createSuccess({ token, user: formatUser(user) }), 201);
 });
 
@@ -131,10 +133,12 @@ authRouter.post('/login', async (c) => {
     JWT_EXPIRES,
   );
 
+  c.header('Set-Cookie', buildAuthCookie(token, c.env.ENVIRONMENT, JWT_EXPIRES));
   return c.json(createSuccess({ token, user: formatUser(user) }));
 });
 
 authRouter.post('/logout', async (c) => {
+  c.header('Set-Cookie', clearAuthCookie(c.env.ENVIRONMENT));
   return c.json(createSuccess({ message: 'Sessão terminada' }));
 });
 
@@ -364,5 +368,6 @@ authRouter.post('/google', async (c) => {
     JWT_EXPIRES,
   );
 
+  c.header('Set-Cookie', buildAuthCookie(token, c.env.ENVIRONMENT, JWT_EXPIRES));
   return c.json(createSuccess({ token, user: formatUser(user) }));
 });

@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { cn } from '@/lib/utils';
+import { cn, getInitials } from '@/lib/utils';
+import { useAuthStore } from '@/stores/authStore';
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
+  const { user, logout, isAuthenticated } = useAuthStore();
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,10 +65,48 @@ export function Header() {
               )}
             </button>
 
-            {/* User menu placeholder */}
-            <Link to="/entrar" className="btn-secondary hidden md:inline-flex">
-              Entrar
-            </Link>
+            {/* User */}
+            {isAuthenticated && user ? (
+              <div className="relative hidden md:block">
+                <button
+                  onClick={() => setShowUserMenu((v) => !v)}
+                  className="inline-flex items-center gap-2 rounded-full bg-throne-100 px-3 py-1.5 text-sm font-medium text-throne-700 border border-throne-200 hover:border-crown-300 transition-colors"
+                >
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-crown-500 text-white font-semibold uppercase">
+                    {getInitials(user.name)}
+                  </span>
+                  <span className="text-left">
+                    <span className="block leading-tight">{user.name}</span>
+                    <span className="text-xs text-throne-400">Perfil</span>
+                  </span>
+                </button>
+                {showUserMenu && (
+                  <div className="absolute right-0 mt-2 w-48 rounded-lg border border-throne-200 bg-white shadow-lg z-20">
+                    <Link
+                      to="/perfil"
+                      className="block px-3 py-2 text-sm text-throne-700 hover:bg-throne-50"
+                      onClick={() => setShowUserMenu(false)}
+                    >
+                      Ver perfil
+                    </Link>
+                    <button
+                      onClick={async () => {
+                        await logout();
+                        setShowUserMenu(false);
+                        navigate('/entrar');
+                      }}
+                      className="block w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                    >
+                      Terminar sessão
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Link to="/entrar" className="btn-secondary hidden md:inline-flex">
+                Entrar
+              </Link>
+            )}
           </div>
         </div>
 
@@ -93,9 +134,27 @@ export function Header() {
               <PlusIcon className="h-4 w-4" />
               Propor Website
             </Link>
-            <Link to="/entrar" className="btn-secondary justify-center">
-              Entrar
-            </Link>
+            {isAuthenticated && user ? (
+              <>
+                <Link to="/perfil" className="btn-secondary justify-center">
+                  Perfil
+                </Link>
+                <button
+                  onClick={async () => {
+                    await logout();
+                    setIsMenuOpen(false);
+                    navigate('/entrar');
+                  }}
+                  className="btn-ghost justify-center"
+                >
+                  Terminar sessão
+                </button>
+              </>
+            ) : (
+              <Link to="/entrar" className="btn-secondary justify-center">
+                Entrar
+              </Link>
+            )}
           </div>
         </div>
       </div>

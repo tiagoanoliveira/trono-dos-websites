@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
+import { GoogleLoginButton } from '@/components/auth/GoogleLoginButton';
 
 export function RegisterPage() {
   const [name, setName] = useState('');
@@ -137,6 +138,17 @@ export function RegisterPage() {
               {isLoading ? 'A criar conta…' : 'Criar conta'}
             </button>
           </form>
+        </div>
+        <div className="mt-6">
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-throne-200" />
+            </div>
+            <div className="relative flex justify-center text-xs text-throne-400">
+              <span className="bg-white px-2">ou</span>
+            </div>
+          </div>
+          <GoogleLoginButton onSuccess={() => navigate('/')} />
         </div>
       </div>
     </div>

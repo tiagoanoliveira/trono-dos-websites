@@ -5,7 +5,9 @@ import {
   createError,
   getPaginationParams,
   buildPaginationMeta,
+  generateId,
 } from '../utils/helpers';
+import { optionalAuth, requireAuth, type AuthContext } from '../middleware/auth';
 
 type WebsiteRow = {
   id: string;
@@ -23,23 +25,69 @@ type WebsiteRow = {
   updated_at: string;
   avg_rating: number | null;
   rating_count: number;
+  user_rating?: number | null;
+  comment_count?: number;
 };
 
 type CountRow = { total: number };
 
-type SortOption = 'rating' | 'recent' | 'featured';
+type SortOption = 'rating' | 'recent' | 'featured' | 'date' | 'popularity';
 
 const SORT_MAP: Record<SortOption, string> = {
   rating: 'avg_rating DESC NULLS LAST, w.created_at DESC',
   recent: 'w.created_at DESC',
+  date: 'w.created_at DESC',
+  popularity: 'COALESCE(r.rating_count, 0) DESC, avg_rating DESC NULLS LAST, w.created_at DESC',
   featured: 'w.featured DESC, avg_rating DESC NULLS LAST, w.created_at DESC',
 };
 
+const MIN_RATING = 1;
+const MAX_RATING = 5;
+const MIN_COMMENT_LENGTH = 3;
+const MAX_COMMENT_LENGTH = 1000;
+
 function isValidSort(value: string | null): value is SortOption {
-  return value === 'rating' || value === 'recent' || value === 'featured';
+  return typeof value === 'string' && value in SORT_MAP;
 }
 
-export const websitesRouter = new Hono<{ Bindings: Env }>();
+type CommentRow = {
+  id: string;
+  website_id: string;
+  user_id: string;
+  content: string;
+  parent_id: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  user_name: string;
+  user_avatar: string | null;
+};
+
+type CommentNode = {
+  id: string;
+  website_id: string;
+  user_id: string;
+  content: string;
+  parent_id: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  user: {
+    id: string;
+    name: string;
+    avatar_url: string | null;
+  };
+  replies: CommentNode[];
+};
+
+type CommentSort = 'newest' | 'oldest';
+
+const COMMENT_SORT_ORDER: Record<CommentSort, string> = {
+  newest: 'c.created_at DESC',
+  oldest: 'c.created_at ASC',
+};
+
+export const websitesRouter = new Hono<{ Bindings: Env } & AuthContext>();
 
 websitesRouter.get('/', async (c) => {
   try {
@@ -108,25 +156,59 @@ websitesRouter.get('/', async (c) => {
   }
 });
 
-websitesRouter.get('/:id', async (c) => {
+websitesRouter.get('/:id', optionalAuth, async (c) => {
   try {
     const { id } = c.req.param();
-
-    const website = await c.env.DB.prepare(
-      `SELECT
+    const userId = c.get('userId');
+    const selectBase = `
+      SELECT
          w.id, w.name, w.url, w.description, w.logo_url, w.screenshot_url,
          w.category_id, cat.name AS category_name, cat.slug AS category_slug,
          w.status, w.featured, w.created_at, w.updated_at,
          AVG(CAST(r.score AS REAL)) AS avg_rating,
-         COALESCE(COUNT(r.id), 0) AS rating_count
+         COALESCE(COUNT(r.id), 0) AS rating_count,
+         COALESCE(cmt.comment_count, 0) AS comment_count
+    `;
+
+    const joinsBase = `
        FROM websites w
        LEFT JOIN categories cat ON cat.id = w.category_id
        LEFT JOIN ratings r ON r.website_id = w.id
+       LEFT JOIN (
+         SELECT website_id, COUNT(*) AS comment_count
+         FROM comments
+         WHERE status = 'visible'
+         GROUP BY website_id
+       ) cmt ON cmt.website_id = w.id
+    `;
+
+    const whereClause = `
        WHERE w.id = ? AND w.status = 'approved'
-       GROUP BY w.id`,
-    )
-      .bind(id)
-      .first<WebsiteRow>();
+       GROUP BY w.id
+    `;
+
+    let website: WebsiteRow | undefined;
+
+    if (userId) {
+      website = await c.env.DB.prepare(
+        `${selectBase},
+         ur.score AS user_rating
+         ${joinsBase}
+         LEFT JOIN ratings ur ON ur.website_id = w.id AND ur.user_id = ?
+         ${whereClause}`,
+      )
+        .bind(userId, id)
+        .first<WebsiteRow>();
+    } else {
+      website = await c.env.DB.prepare(
+        `${selectBase},
+         NULL AS user_rating
+         ${joinsBase}
+         ${whereClause}`,
+      )
+        .bind(id)
+        .first<WebsiteRow>();
+    }
 
     if (!website) {
       return c.json(createError('NOT_FOUND', `Website '${id}' not found`), 404);
@@ -136,5 +218,226 @@ websitesRouter.get('/:id', async (c) => {
   } catch (err) {
     console.error('[websites GET /:id]', err);
     return c.json(createError('INTERNAL_ERROR', 'Failed to fetch website'), 500);
+  }
+});
+
+websitesRouter.post('/:id/ratings', requireAuth, async (c) => {
+  try {
+    const { id } = c.req.param();
+    const userId = c.get('userId');
+
+    const exists = await c.env.DB.prepare(
+      "SELECT id FROM websites WHERE id = ? AND status = 'approved'",
+    )
+      .bind(id)
+      .first<{ id: string }>();
+
+    if (!exists) {
+      return c.json(createError('NOT_FOUND', 'Website não encontrado'), 404);
+    }
+
+    let body: { score?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
+    }
+
+    const { score } = body;
+    if (
+      typeof score !== 'number' ||
+      !Number.isInteger(score) ||
+      score < MIN_RATING ||
+      score > MAX_RATING
+    ) {
+      return c.json(
+        createError('VALIDATION_ERROR', `Avaliação deve ser um número entre ${MIN_RATING} e ${MAX_RATING}`),
+        400,
+      );
+    }
+
+    await c.env.DB.prepare(
+      `INSERT INTO ratings (id, website_id, user_id, score)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(website_id, user_id) DO UPDATE SET score = excluded.score, created_at = CURRENT_TIMESTAMP`,
+    )
+      .bind(generateId(), id, userId, score)
+      .run();
+
+    const summary = await c.env.DB.prepare(
+      `SELECT
+         AVG(CAST(score AS REAL)) AS avg_rating,
+         COUNT(*) AS rating_count,
+         MAX(CASE WHEN user_id = ? THEN score END) AS user_rating
+       FROM ratings
+       WHERE website_id = ?`,
+    )
+      .bind(userId, id)
+      .first<{ avg_rating: number | null; rating_count: number; user_rating: number | null }>();
+
+    return c.json(
+      createSuccess({
+        avg_rating: summary?.avg_rating ?? 0,
+        rating_count: summary?.rating_count ?? 0,
+        user_rating: summary?.user_rating ?? score,
+      }),
+    );
+  } catch (err) {
+    console.error('[websites POST /:id/ratings]', err);
+    return c.json(createError('INTERNAL_ERROR', 'Não foi possível guardar a avaliação'), 500);
+  }
+});
+
+websitesRouter.get('/:id/comments', optionalAuth, async (c) => {
+  try {
+    const { id } = c.req.param();
+    const url = new URL(c.req.url);
+    const sortParam = url.searchParams.get('sort');
+    const sort: CommentSort = sortParam === 'oldest' ? 'oldest' : 'newest';
+    const orderClause = COMMENT_SORT_ORDER[sort];
+
+    const rows = await c.env.DB.prepare(
+      `SELECT
+         c.*, u.name AS user_name, u.avatar_url AS user_avatar
+       FROM comments c
+       JOIN users u ON u.id = c.user_id
+       WHERE c.website_id = ? AND c.status = 'visible'
+       ORDER BY ${orderClause}`,
+    )
+      .bind(id)
+      .all<CommentRow>()
+      .then((r) => r.results);
+
+    const nodes: CommentNode[] = rows.map((row) => ({
+      id: row.id,
+      website_id: row.website_id,
+      user_id: row.user_id,
+      content: row.content,
+      parent_id: row.parent_id,
+      status: row.status,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      user: {
+        id: row.user_id,
+        name: row.user_name,
+        avatar_url: row.user_avatar,
+      },
+      replies: [],
+    }));
+
+    const map = new Map<string, CommentNode>();
+    nodes.forEach((node) => map.set(node.id, node));
+
+    const roots: CommentNode[] = [];
+    nodes.forEach((node) => {
+      if (node.parent_id && map.has(node.parent_id)) {
+        map.get(node.parent_id)?.replies.push(node);
+      } else {
+        roots.push(node);
+      }
+    });
+
+    return c.json(createSuccess(roots, { total: nodes.length }));
+  } catch (err) {
+    console.error('[websites GET /:id/comments]', err);
+    return c.json(createError('INTERNAL_ERROR', 'Falha ao carregar comentários'), 500);
+  }
+});
+
+websitesRouter.post('/:id/comments', requireAuth, async (c) => {
+  try {
+    const { id } = c.req.param();
+    const userId = c.get('userId');
+
+    const website = await c.env.DB.prepare(
+      "SELECT id FROM websites WHERE id = ? AND status = 'approved'",
+    )
+      .bind(id)
+      .first<{ id: string }>();
+
+    if (!website) {
+      return c.json(createError('NOT_FOUND', 'Website não encontrado'), 404);
+    }
+
+    let body: { content?: unknown; parentId?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
+    }
+
+    const { content, parentId } = body;
+    if (
+      typeof content !== 'string' ||
+      content.trim().length < MIN_COMMENT_LENGTH ||
+      content.trim().length > MAX_COMMENT_LENGTH
+    ) {
+      return c.json(
+        createError(
+          'VALIDATION_ERROR',
+          `Comentário deve ter entre ${MIN_COMMENT_LENGTH} e ${MAX_COMMENT_LENGTH} caracteres`,
+        ),
+        400,
+      );
+    }
+
+    if (parentId !== undefined && parentId !== null && typeof parentId !== 'string') {
+      return c.json(createError('VALIDATION_ERROR', 'parentId inválido'), 400);
+    }
+
+    if (parentId) {
+      const parent = await c.env.DB.prepare(
+        'SELECT id FROM comments WHERE id = ? AND website_id = ? AND status = "visible"',
+      )
+        .bind(parentId, id)
+        .first<{ id: string }>();
+
+      if (!parent) {
+        return c.json(createError('VALIDATION_ERROR', 'Comentário pai não encontrado'), 400);
+      }
+    }
+
+    const commentId = generateId();
+
+    await c.env.DB.prepare(
+      'INSERT INTO comments (id, website_id, user_id, content, parent_id, status) VALUES (?, ?, ?, ?, ?, "visible")',
+    )
+      .bind(commentId, id, userId, content.trim(), parentId ?? null)
+      .run();
+
+    const inserted = await c.env.DB.prepare(
+      `SELECT c.*, u.name AS user_name, u.avatar_url AS user_avatar
+       FROM comments c
+       JOIN users u ON u.id = c.user_id
+       WHERE c.id = ?`,
+    )
+      .bind(commentId)
+      .first<CommentRow>();
+
+    if (!inserted) {
+      return c.json(createError('INTERNAL_ERROR', 'Erro ao criar comentário'), 500);
+    }
+
+    const node: CommentNode = {
+      id: inserted.id,
+      website_id: inserted.website_id,
+      user_id: inserted.user_id,
+      content: inserted.content,
+      parent_id: inserted.parent_id,
+      status: inserted.status,
+      created_at: inserted.created_at,
+      updated_at: inserted.updated_at,
+      user: {
+        id: inserted.user_id,
+        name: inserted.user_name,
+        avatar_url: inserted.user_avatar,
+      },
+      replies: [],
+    };
+
+    return c.json(createSuccess(node));
+  } catch (err) {
+    console.error('[websites POST /:id/comments]', err);
+    return c.json(createError('INTERNAL_ERROR', 'Não foi possível criar o comentário'), 500);
   }
 });

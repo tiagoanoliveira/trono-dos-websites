@@ -5,7 +5,7 @@ import type { Website, PaginatedResponse } from '@/types';
 export interface WebsiteFilters {
   category_id?: string;
   search?: string;
-  sort?: 'rating' | 'recent' | 'featured';
+  sort?: 'rating' | 'recent' | 'featured' | 'date' | 'popularity';
   page?: number;
   perPage?: number;
 }
