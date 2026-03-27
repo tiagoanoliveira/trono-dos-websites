@@ -263,7 +263,7 @@ npm run db:migrate
    - **Wrangler config path (opcional mas recomendado):** `apps/web/wrangler.toml`
 5. Bindings/Variáveis (definir por ambiente em Pages):
    - D1: Binding `DB` associado à base `trono-db` (usa o mesmo ID do `wrangler.toml`)
-   - Vars: `ENVIRONMENT=production`, `FRONTEND_ORIGIN=https://<teu-dominio-pages-ou-custom>`, opcional `DEBUG_LOGS=true` para ativar logs de pedidos (default: desligado).
+   - Vars: `ENVIRONMENT=production`; opcional `FRONTEND_ORIGIN=https://<teu-dominio-pages-ou-custom>` (se definires, só esse Origin é permitido; se não definires, a API ecoa o Origin do pedido). Opcional `DEBUG_LOGS=true` para ativar logs de pedidos (default: desligado).
    - Secrets: `JWT_SECRET` (obrigatório); `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` se usares OAuth.
 6. Rotas: a função está em `functions/api/[[path]].ts` (raiz do repo) e expõe `/api/*` (o frontend continua a chamar `/api` por defeito).
 7. Local: `cd apps/web && wrangler pages dev --local` (usa o `wrangler.toml` da pasta para ler bindings).
