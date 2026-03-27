@@ -1,4 +1,5 @@
 -- Seed data for Trono dos Websites
+-- ⚠️ DEMO/APENAS DESENVOLVIMENTO. NÃO UTILIZAR EM PRODUÇÃO.
 -- Run with: wrangler d1 execute trono-db --file=../../scripts/seed.sql
 
 -- ============================================================

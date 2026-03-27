@@ -280,3 +280,4 @@ npm run db:migrate
 ## 🌱 Seed de dados rápido
 - Executa `npm run db:migrate` e depois `npm run db:seed` para popular categorias e exemplos.
 - Utilizador demo: `demo@trono.local` com password `Password123` (já criada no seed) para testar submissões/estado.
+- ⚠️ Estes dados e credenciais são apenas para desenvolvimento/teste. **Não** correr o seed em produção nem reutilizar a conta demo em ambientes reais.

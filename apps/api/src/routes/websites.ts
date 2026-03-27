@@ -1,14 +1,8 @@
 import { Hono } from 'hono';
 import type { Env } from '../index';
-import {
-  createSuccess,
-  createError,
-  getPaginationParams,
-  buildPaginationMeta,
-  generateId,
-} from '../utils/helpers';
+import { createSuccess, createError, getPaginationParams, buildPaginationMeta, generateId } from '../utils/helpers';
 import { optionalAuth, requireAuth, type AuthContext } from '../middleware/auth';
-import { MIN_NAME_LENGTH } from '../utils/validation';
+import { MIN_NAME_LENGTH, normalizeUrl } from '../utils/validation';
 
 type WebsiteRow = {
   id: string;
@@ -89,13 +83,6 @@ const COMMENT_SORT_ORDER: Record<CommentSort, string> = {
 };
 
 export const websitesRouter = new Hono<{ Bindings: Env } & AuthContext>();
-
-function normalizeUrl(input: string): string {
-  const url = new URL(input);
-  const pathname = url.pathname.replace(/\/+$/, '') || '/';
-  const search = url.search;
-  return `${url.protocol}//${url.host.toLowerCase()}${pathname}${search}`;
-}
 
 websitesRouter.post('/', requireAuth, async (c) => {
   try {
