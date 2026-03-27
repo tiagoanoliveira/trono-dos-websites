@@ -2,6 +2,9 @@
 -- ⚠️ DEMO/APENAS DESENVOLVIMENTO. NÃO UTILIZAR EM PRODUÇÃO.
 -- Run with: wrangler d1 execute trono-db --file=../../scripts/seed.sql
 
+-- Proteção: aborta se já existirem utilizadores (evita correr em bases com dados reais)
+SELECT CASE WHEN EXISTS (SELECT 1 FROM users) THEN RAISE(ABORT, 'Seed bloqueado: tabela users já tem dados') END;
+
 -- ============================================================
 -- USERS (demo) - ⚠️ credenciais apenas para desenvolvimento/testes
 -- Password em texto: Password123 (para que não haja dúvidas sobre o hash)

@@ -27,6 +27,7 @@ const STATUS_VARIANTS: Record<string, { label: string; variant: 'warning' | 'suc
   pending: { label: 'Pendente', variant: 'warning' },
   approved: { label: 'Aprovado', variant: 'success' },
   rejected: { label: 'Rejeitado', variant: 'danger' },
+  default: { label: 'Estado desconhecido', variant: 'default' },
 };
 
 const formatDatePt = (value: string) => {
@@ -330,6 +331,6 @@ export function ProporWebsitePage() {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const data = STATUS_VARIANTS[status] ?? { label: status, variant: 'default' };
+  const data = STATUS_VARIANTS[status] ?? STATUS_VARIANTS.default;
   return <Badge variant={data.variant}>{data.label}</Badge>;
 }
