@@ -5,7 +5,7 @@ Plataforma colaborativa que reúne as melhores ferramentas e websites para portu
 ## 🚀 Tecnologias
 
 - **Frontend:** React 18 + TypeScript + Tailwind CSS
-- **Backend:** Cloudflare Workers
+- **Backend:** Cloudflare Pages Functions (Hono)
 - **Base de Dados:** Cloudflare D1 (SQLite)
 - **Autenticação:** Email/Password + Google OAuth
 - **Deploy:** Cloudflare Pages
@@ -15,21 +15,15 @@ Plataforma colaborativa que reúne as melhores ferramentas e websites para portu
 ```bash
 ┌─────────────────────────────────────────────────────────┐
 │                    Cloudflare Pages                      │
-│                  (Frontend - React + Tailwind)           │
+│          (Frontend + API via Pages Functions)            │
 └─────────────────────────┬───────────────────────────────┘
-                          │
-┌─────────────────────────▼───────────────────────────────┐
-│                  Cloudflare Workers                      │
-│                     (API Backend)                        │
-└─────────────────────────┬───────────────────────────────┘
-                          │
-        ┌─────────────────┼─────────────────┐
-        ▼                 ▼                 ▼
-┌───────────────┐ ┌───────────────┐ ┌───────────────┐
-│  Cloudflare   │ │  Cloudflare   │ │  Cloudflare   │
-│      D1       │ │      R2       │ │      KV       │
-│  (Database)   │ │   (Assets)    │ │   (Cache)     │
-└───────────────┘ └───────────────┘ └───────────────┘
+                          │ (Bindings)
+                          ▼
+┌───────────────┐
+│  Cloudflare   │
+│      D1       │
+│  (Database)   │
+└───────────────┘
 ```
 ## Base de Dados
 
@@ -147,7 +141,7 @@ CREATE TABLE category_suggestions (
 ## Funcionalidades por Fase
 ### Fase 1 — Fundação
 - [x] Setup do projeto (Vite + React + TypeScript + Tailwind)
-- [x] Configuração Cloudflare Pages + Workers + D1
+ - [x] Configuração Cloudflare Pages + Functions + D1
 - [x] Layout base (header, footer, navegação)
 - [x] Página inicial com listagem de categorias
 - [x] Página de categoria com listagem de websites
@@ -208,13 +202,17 @@ CREATE TABLE category_suggestions (
 │   │   ├── public/
 │   │   └── index.html
 │   │
-│   └── api/                    # Cloudflare Workers
+│   └── api/                    # (Código da API reutilizado pela Pages Function)
 │       ├── src/
 │       │   ├── routes/
 │       │   ├── middleware/
 │       │   ├── services/
 │       │   └── utils/
-│       └── wrangler.toml
+│       └── wrangler.toml       # Mantido para comandos D1 (migrations/seed)
+│   └── web/
+│       ├── functions/          # Pages Functions (API em Hono)
+│       │   └── api/[[path]].ts
+│       └── wrangler.toml       # Config do projeto Pages (bindings D1/vars)
 │
 ├── packages/
 │   └── shared/                 # Tipos e utilitários partilhados
@@ -248,38 +246,29 @@ npm install
 # Iniciar frontend
 npm run dev
 
-# Iniciar API (noutra janela)
-npm run dev:api
-
 # Correr migrações
 npm run db:migrate
 ```
 
 ## 🚀 Deploy na Cloudflare
 
-### API (Workers + D1)
+### API (Pages Functions + D1)
 1. Instalar dependências: `npm install`
-2. Criar a base D1: `cd apps/api && wrangler d1 create trono-db` e atualizar o `database_id` em `apps/api/wrangler.toml` (o nome do worker nesse ficheiro é `trono-api`).
-3. Aplicar migrações: `npm run db:migrate` (executa `wrangler d1 migrations apply trono-db`).
-4. Segredos e variáveis:
-   - `wrangler secret put JWT_SECRET`
-   - Opcional: `wrangler secret put GOOGLE_CLIENT_ID` e `wrangler secret put GOOGLE_CLIENT_SECRET`
-   - Ajustar `ENVIRONMENT` para `production` em `wrangler.toml` ou via `--var ENVIRONMENT=production`
-5. Deploy do worker: `npm run deploy` (ou `wrangler deploy` dentro de `apps/api`).
+2. Criar a base D1 (uma vez): `cd apps/api && wrangler d1 create trono-db` e substituir o `database_id` em **apps/web/wrangler.toml** pelo valor gerado.
+3. Aplicar migrações: `npm run db:migrate` (usa o `wrangler.toml` da API para apontar para `migrations/`).
+4. Cloudflare Pages (Dashboard) → Projeto:
+   - **Build command:** `npm run build --workspace=apps/web`
+   - **Output directory:** `apps/web/dist`
+   - **Functions directory:** `apps/web/functions`
+   - **Wrangler config path (opcional mas recomendado):** `apps/web/wrangler.toml`
+5. Bindings/Variáveis (definir por ambiente em Pages):
+   - D1: Binding `DB` associado à base `trono-db` (usa o mesmo ID do `wrangler.toml`)
+   - Vars: `ENVIRONMENT=production`, `FRONTEND_ORIGIN=https://<teu-dominio-pages-ou-custom>`
+   - Secrets: `JWT_SECRET` (obrigatório); `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` se usares OAuth.
+6. Rotas: a função está em `apps/web/functions/api/[[path]].ts` e expõe `/api/*` (o frontend continua a chamar `/api` por defeito).
+7. Local: `cd apps/web && wrangler pages dev --local` (usa o `wrangler.toml` da pasta para ler bindings).
 
-### Frontend (Cloudflare Pages)
-1. Criar projeto Pages a partir do repositório.
-2. Instalação: `npm install`
-3. Build command: `npm run build --workspace=apps/web`
-4. Output directory: `apps/web/dist`
-5. Node version: 18+
-6. Rota / binding para API:
-   - Em Pages > Functions/Routes, criar rota `/api/*` apontando para o worker `trono-api` (nome definido em `apps/api/wrangler.toml`). Assim o frontend continua a chamar `/api` como já configurado no Vite.
-   - Preferes um domínio separado para a API (ex.: `https://api.seudominio.com`)? Define a variável de ambiente `VITE_API_URL` no projeto Pages com esse URL e adiciona esse domínio ao Worker em "Custom Domains" no Cloudflare.
-
-> Tip: in production, don't keep `JWT_SECRET` in `wrangler.toml`; use `wrangler secret` only.
-
-> Porquê usar Workers? O Cloudflare Pages é apenas estático (ou Functions leves) e não expõe bindings de D1 diretamente ao browser. O acesso ao D1 precisa de acontecer no edge (server-side) via Worker/Function com o binding `DB`. O frontend chama a API `/api` (ou `VITE_API_URL`) e o Worker trata da ligação à base de dados.
+> Tip: não guardes segredos no `wrangler.toml`; usa Secrets no Pages.
 
 ## 🌱 Seed de dados rápido
 - Executa `npm run db:migrate` e depois `npm run db:seed` para popular categorias e exemplos.

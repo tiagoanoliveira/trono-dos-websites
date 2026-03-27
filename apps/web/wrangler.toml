@@ -1,0 +1,13 @@
+name = "trono-pages"
+compatibility_date = "2025-03-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "./dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "trono-db"
+database_id = "c4e9201b-7ac2-472c-adb3-49e8db50e10d"
+migrations_dir = "../../migrations"
+
+[vars]
+ENVIRONMENT = "production"

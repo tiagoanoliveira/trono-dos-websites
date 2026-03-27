@@ -1,7 +1,8 @@
 import type { ApiResponse } from '@trono/shared/types';
 
-// In production, set VITE_API_URL to point to the Worker (e.g., https://api.seudominio.com)
-const API_BASE = (import.meta.env && import.meta.env.VITE_API_URL) ? import.meta.env.VITE_API_URL : '/api';
+// Em produção, define VITE_API_URL se quiseres um domínio dedicado para a API (Pages Function),
+// caso contrário mantém o default `/api` na mesma origem do site.
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 class ApiClient {
   private baseUrl: string;
