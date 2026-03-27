@@ -23,6 +23,12 @@ type MyWebsite = {
   created_at: string;
 };
 
+const STATUS_VARIANTS: Record<string, { label: string; variant: 'warning' | 'success' | 'danger' | 'default' }> = {
+  pending: { label: 'Pendente', variant: 'warning' },
+  approved: { label: 'Aprovado', variant: 'success' },
+  rejected: { label: 'Rejeitado', variant: 'danger' },
+};
+
 export function ProporWebsitePage() {
   const { isAuthenticated, user } = useAuthStore();
   const queryClient = useQueryClient();
@@ -315,11 +321,6 @@ export function ProporWebsitePage() {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; variant: 'warning' | 'success' | 'danger' | 'default' }> = {
-    pending: { label: 'Pendente', variant: 'warning' },
-    approved: { label: 'Aprovado', variant: 'success' },
-    rejected: { label: 'Rejeitado', variant: 'danger' },
-  };
-  const data = map[status] ?? { label: status, variant: 'default' };
+  const data = STATUS_VARIANTS[status] ?? { label: status, variant: 'default' };
   return <Badge variant={data.variant}>{data.label}</Badge>;
 }

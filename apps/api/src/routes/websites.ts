@@ -135,7 +135,7 @@ websitesRouter.post('/', requireAuth, async (c) => {
       return c.json(createError('VALIDATION_ERROR', 'Categoria inválida'), 400);
     }
 
-    const normalizedUrl = normalizeUrl(parsedUrl.toString());
+    const normalizedUrl = normalizeUrl(parsedUrl);
 
     const existing = await c.env.DB.prepare('SELECT id FROM websites WHERE url = ?')
       .bind(normalizedUrl)
