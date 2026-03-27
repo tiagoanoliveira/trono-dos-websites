@@ -273,9 +273,13 @@ npm run db:migrate
 3. Build command: `npm run build --workspace=apps/web`
 4. Output directory: `apps/web/dist`
 5. Node version: 18+
-6. Rota / binding para API: em Pages > Functions/Routes, criar rota `/api/*` apontando para o worker `trono-api` (nome definido em `apps/api/wrangler.toml`). Assim o frontend continua a chamar `/api` como já configurado no Vite.
+6. Rota / binding para API:
+   - Em Pages > Functions/Routes, criar rota `/api/*` apontando para o worker `trono-api` (nome definido em `apps/api/wrangler.toml`). Assim o frontend continua a chamar `/api` como já configurado no Vite.
+   - Preferes um domínio separado para a API (ex.: `https://api.seudominio.com`)? Define a variável de ambiente `VITE_API_URL` no projeto Pages com esse URL e adiciona esse domínio ao Worker em "Custom Domains" no Cloudflare.
 
 > Tip: in production, don't keep `JWT_SECRET` in `wrangler.toml`; use `wrangler secret` only.
+
+> Porquê usar Workers? O Cloudflare Pages é apenas estático (ou Functions leves) e não expõe bindings de D1 diretamente ao browser. O acesso ao D1 precisa de acontecer no edge (server-side) via Worker/Function com o binding `DB`. O frontend chama a API `/api` (ou `VITE_API_URL`) e o Worker trata da ligação à base de dados.
 
 ## 🌱 Seed de dados rápido
 - Executa `npm run db:migrate` e depois `npm run db:seed` para popular categorias e exemplos.

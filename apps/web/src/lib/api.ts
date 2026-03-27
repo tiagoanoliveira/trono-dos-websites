@@ -1,6 +1,7 @@
 import type { ApiResponse } from '@trono/shared/types';
 
-const API_BASE = '/api';
+// In production, set VITE_API_URL to point to the Worker (e.g., https://api.seudominio.com)
+const API_BASE = (import.meta.env && import.meta.env.VITE_API_URL) ? import.meta.env.VITE_API_URL : '/api';
 
 class ApiClient {
   private baseUrl: string;
