@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { corsMiddleware } from './middleware/cors';
 import { categoriesRouter } from './routes/categories';
 import { websitesRouter } from './routes/websites';
+import { ideasRouter } from './routes/ideas';
 import { authRouter } from './routes/auth';
 
 export type Env = {
@@ -31,6 +32,7 @@ app.get('/api/health', (c) => {
 app.route('/api/auth', authRouter);
 app.route('/api/categories', categoriesRouter);
 app.route('/api/websites', websitesRouter);
+app.route('/api/ideas', ideasRouter);
 
 app.notFound((c) => {
   return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Route not found' } }, 404);

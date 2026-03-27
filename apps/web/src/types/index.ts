@@ -53,7 +53,42 @@ export interface Comment {
   user: {
     id: string;
     name: string;
-    avatar_url: string | null;
-  };
+  avatar_url: string | null;
+};
   replies: Comment[];
+}
+
+export interface Idea {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  suggested_by?: string | null;
+  claimed_by?: string | null;
+  claimed_user_name?: string | null;
+  claimed_user_avatar?: string | null;
+  claimed_at?: string | null;
+  created_at: string;
+  upvotes: number;
+  downvotes: number;
+  feature_count: number;
+  comment_count: number;
+}
+
+export interface IdeaFeature {
+  id: string;
+  idea_id: string;
+  description: string;
+  created_by?: string | null;
+  created_at: string;
+}
+
+export interface IdeaComment {
+  id: string;
+  idea_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  user_name: string;
+  user_avatar: string | null;
 }
