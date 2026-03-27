@@ -3,7 +3,12 @@
 -- Run with: wrangler d1 execute trono-db --file=../../scripts/seed.sql
 
 -- Proteção: aborta se já existirem utilizadores (evita correr em bases com dados reais)
-SELECT CASE WHEN EXISTS (SELECT 1 FROM users) THEN RAISE(ABORT, 'Seed bloqueado: tabela users já tem dados') END;
+SELECT CASE
+  WHEN NOT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'users')
+    THEN RAISE(ABORT, 'Seed bloqueado: corre as migrações primeiro')
+  WHEN EXISTS (SELECT 1 FROM users)
+    THEN RAISE(ABORT, 'Seed bloqueado: tabela users já tem dados')
+END;
 
 -- ============================================================
 -- USERS (demo) - ⚠️ credenciais apenas para desenvolvimento/testes

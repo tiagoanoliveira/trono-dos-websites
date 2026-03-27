@@ -198,20 +198,40 @@ ideasRouter.post('/:id/votes', requireAuth, async (c) => {
       return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
     }
     const { value } = body;
-    if (value !== 1 && value !== -1) {
+    if (value !== 1 && value !== -1 && value !== 0) {
       return c.json(createError('VALIDATION_ERROR', 'Voto inválido'), 400);
     }
 
     const idea = await c.env.DB.prepare('SELECT id FROM ideas WHERE id = ?').bind(id).first();
     if (!idea) return c.json(createError('NOT_FOUND', 'Ideia não encontrada'), 404);
 
-    await c.env.DB.prepare(
-      `INSERT INTO idea_votes (id, idea_id, user_id, value)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(idea_id, user_id) DO UPDATE SET value = excluded.value, created_at = CURRENT_TIMESTAMP`,
+    if (value === 0) {
+      await c.env.DB.prepare('DELETE FROM idea_votes WHERE idea_id = ? AND user_id = ?').bind(id, userId).run();
+    } else {
+      await c.env.DB.prepare(
+        `INSERT INTO idea_votes (id, idea_id, user_id, value)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(idea_id, user_id) DO UPDATE SET value = excluded.value, created_at = CURRENT_TIMESTAMP`,
+      )
+        .bind(generateId(), id, userId, value)
+        .run();
+    }
+
+    const totals = await c.env.DB.prepare(
+      `SELECT
+        COALESCE(SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END),0) AS upvotes,
+        COALESCE(SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END),0) AS downvotes
+       FROM idea_votes WHERE idea_id = ?`,
     )
-      .bind(generateId(), id, userId, value)
-      .run();
+      .bind(id)
+      .first<{ upvotes: number; downvotes: number }>();
+
+    if (totals) {
+      const computedStatus = totals.upvotes - totals.downvotes >= APPROVAL_THRESHOLD ? 'approved' : undefined;
+      if (computedStatus) {
+        await c.env.DB.prepare('UPDATE ideas SET status = ? WHERE id = ?').bind(computedStatus, id).run();
+      }
+    }
 
     return c.json(createSuccess({ ok: true }));
   } catch (err) {
@@ -303,7 +323,7 @@ ideasRouter.post('/:id/claim', requireAuth, async (c) => {
     }
 
     await c.env.DB.prepare(
-      'UPDATE ideas SET claimed_by = ?, claimed_at = CURRENT_TIMESTAMP, status = "closed" WHERE id = ?',
+      'UPDATE ideas SET claimed_by = ?, claimed_at = CURRENT_TIMESTAMP, status = COALESCE(status, "open") WHERE id = ?',
     )
       .bind(userId, id)
       .run();
