@@ -12,11 +12,20 @@ export type Env = {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   FRONTEND_ORIGIN?: string;
+  DEBUG_LOGS?: string;
 };
 
 const app = new Hono<{ Bindings: Env }>();
 
 app.use('*', corsMiddleware);
+app.use('*', async (c, next) => {
+  // Read per-request so toggling DEBUG_LOGS takes effect without waiting for isolates to recycle.
+  const debugEnabled = c.env.DEBUG_LOGS === 'true';
+  if (debugEnabled) {
+    console.log('[request]', c.req.method, c.req.path, { origin: c.req.header('Origin') ?? 'n/a' });
+  }
+  await next();
+});
 
 app.get('/api/health', (c) => {
   return c.json({

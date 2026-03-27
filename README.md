@@ -259,16 +259,25 @@ npm run db:migrate
 4. Cloudflare Pages (Dashboard) → Projeto:
    - **Build command:** `npm run build --workspace=apps/web`
    - **Output directory:** `apps/web/dist`
-   - **Functions directory:** `apps/web/functions`
+   - **Functions directory:** o Pages deteta automaticamente `apps/web/functions` via `apps/web/wrangler.toml` (não é preciso apontar manualmente na UI atual; apenas confirma que os ficheiros estão no repositório).
    - **Wrangler config path (opcional mas recomendado):** `apps/web/wrangler.toml`
 5. Bindings/Variáveis (definir por ambiente em Pages):
    - D1: Binding `DB` associado à base `trono-db` (usa o mesmo ID do `wrangler.toml`)
-   - Vars: `ENVIRONMENT=production`, `FRONTEND_ORIGIN=https://<teu-dominio-pages-ou-custom>`
+   - Vars: `ENVIRONMENT=production`, `FRONTEND_ORIGIN=https://<teu-dominio-pages-ou-custom>`, opcional `DEBUG_LOGS=true` para ativar logs de pedidos (default: desligado).
    - Secrets: `JWT_SECRET` (obrigatório); `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` se usares OAuth.
 6. Rotas: a função está em `apps/web/functions/api/[[path]].ts` e expõe `/api/*` (o frontend continua a chamar `/api` por defeito).
 7. Local: `cd apps/web && wrangler pages dev --local` (usa o `wrangler.toml` da pasta para ler bindings).
 
 > Tip: não guardes segredos no `wrangler.toml`; usa Secrets no Pages.
+
+### Google Auth (One Tap / Sign In)
+- Frontend espera `VITE_GOOGLE_CLIENT_ID` (definir em Pages → Settings → Environment variables). Usa o mesmo Client ID configurado na Google Cloud Console.
+- Client type: OAuth 2.0 (Web). Em **Authorized JavaScript origins** adiciona os domínios do site (ex.: `https://<teu>.pages.dev` e o domínio custom). O flow usado (`tokeninfo` com `id_token`) não requer redirect URI dedicado, mas podes adicionar `https://<teu-dominio>/` como precaução.
+- Endpoint da API: `POST /api/auth/google` recebe `{ id_token }` (o componente `GoogleLoginButton` trata de enviar o token).
+- Se precisares de depuração adicional da API, define `DEBUG_LOGS=true` nas variáveis (apenas para uso temporário).
+
+### Próxima fase
+- Fase 4 — Contribuições (próxima a implementar: formulários de submissão de website/categoria, painel de contribuições, notificações de estado).
 
 ## 🌱 Seed de dados rápido
 - Executa `npm run db:migrate` e depois `npm run db:seed` para popular categorias e exemplos.
