@@ -49,6 +49,14 @@ categoriesRouter.post('/suggestions', requireAuth, async (c) => {
       );
     }
 
+    let normalizedDescription: string | null = null;
+    if (description !== undefined && description !== null) {
+      if (typeof description !== 'string') {
+        return c.json(createError('VALIDATION_ERROR', 'Descrição inválida'), 400);
+      }
+      normalizedDescription = description.trim() || null;
+    }
+
     const id = generateId();
     const userId = c.get('userId');
 
@@ -56,7 +64,7 @@ categoriesRouter.post('/suggestions', requireAuth, async (c) => {
       `INSERT INTO category_suggestions (id, name, description, suggested_by, status, created_at)
        VALUES (?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)`,
     )
-      .bind(id, name.trim(), description?.toString().trim() ?? null, userId)
+      .bind(id, name.trim(), normalizedDescription, userId)
       .run();
 
     const created = await c.env.DB.prepare('SELECT * FROM category_suggestions WHERE id = ?')

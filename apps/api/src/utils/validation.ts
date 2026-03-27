@@ -3,6 +3,7 @@ export const MIN_NAME_LENGTH = 3;
 export function normalizeUrl(input: string | URL): string {
   try {
     const url = typeof input === 'string' ? new URL(input) : input;
+    // Normaliza removendo barras finais para evitar duplicados "https://site.com" vs "https://site.com/"
     const pathname = url.pathname.replace(/\/+$/, '') || '/';
     const search = url.search;
     return `${url.protocol}//${url.host.toLowerCase()}${pathname}${search}`;
