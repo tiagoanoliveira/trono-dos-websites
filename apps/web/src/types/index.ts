@@ -26,7 +26,19 @@ export interface Website {
   rating_count?: number;
   user_rating?: number | null;
   comment_count?: number;
+  metadata?: WebsiteMetadata | null;
+  owner_name?: string | null;
   created_at: string;
+}
+
+export interface WebsiteMetadata {
+  author?: string | null;
+  launch_date?: string | null;
+  launch_precision?: 'exact' | 'month' | 'year' | 'unknown';
+  languages?: string[];
+  images?: string[];
+  is_open_source?: boolean;
+  source_url?: string | null;
 }
 
 export interface PaginatedResponse<T> {
@@ -48,13 +60,14 @@ export interface Comment {
   content: string;
   parent_id: string | null;
   status: string;
+  kind?: string | null;
   created_at: string;
   updated_at: string;
   user: {
     id: string;
     name: string;
-  avatar_url: string | null;
-};
+    avatar_url: string | null;
+  };
   replies: Comment[];
 }
 

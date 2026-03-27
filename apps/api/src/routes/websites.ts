@@ -18,6 +18,8 @@ type WebsiteRow = {
   featured: number;
   created_at: string;
   updated_at: string;
+  metadata?: string | null;
+  owner_name?: string | null;
   avg_rating: number | null;
   rating_count: number;
   user_rating?: number | null;
@@ -40,9 +42,119 @@ const MIN_RATING = 1;
 const MAX_RATING = 5;
 const MIN_COMMENT_LENGTH = 3;
 const MAX_COMMENT_LENGTH = 1000;
+type WebsiteMetadata = {
+  author?: string | null;
+  launch_date?: string | null;
+  launch_precision?: 'exact' | 'month' | 'year' | 'unknown';
+  languages?: string[];
+  images?: string[];
+  is_open_source?: boolean;
+  source_url?: string | null;
+};
 
 function isValidSort(value: string | null): value is SortOption {
   return typeof value === 'string' && value in SORT_MAP;
+}
+
+function parseMetadata(value?: string | null): WebsiteMetadata | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed && typeof parsed === 'object') {
+      return parsed as WebsiteMetadata;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Normalizes optional metadata sent by the client so it can be safely stored
+ * as a JSON string in the `websites.metadata` column. Only supported keys are
+ * kept and empty values are discarded.
+ */
+function normalizeWebsiteMetadata(input: unknown): string | null {
+  if (!input || typeof input !== 'object') return null;
+
+  const data = input as Record<string, unknown>;
+  const metadata: WebsiteMetadata = {};
+
+  if (typeof data.author === 'string') {
+    metadata.author = data.author.trim() || null;
+  }
+
+  if (typeof data.launchDate === 'string') {
+    metadata.launch_date = data.launchDate.trim() || null;
+  }
+
+  const launchPrecision = data.launchPrecision;
+  if (
+    typeof launchPrecision === 'string' &&
+    (metadata.launch_date || launchPrecision === 'exact' || launchPrecision === 'month' || launchPrecision === 'year')
+  ) {
+    metadata.launch_precision = launchPrecision as WebsiteMetadata['launch_precision'];
+  }
+
+  if (Array.isArray(data.languages)) {
+    const langs = data.languages
+      .filter((lang) => typeof lang === 'string')
+      .map((lang) => lang.trim())
+      .filter(Boolean);
+    if (langs.length > 0) metadata.languages = langs;
+  }
+
+  if (Array.isArray(data.images)) {
+    const imgs = data.images
+      .filter((url) => typeof url === 'string')
+      .map((url) => url.trim())
+      .filter(Boolean);
+    if (imgs.length > 0) metadata.images = imgs;
+  }
+
+  if (typeof data.isOpenSource === 'boolean') {
+    metadata.is_open_source = data.isOpenSource;
+  }
+
+  if (typeof data.sourceUrl === 'string') {
+    metadata.source_url = data.sourceUrl.trim() || null;
+  }
+
+  const hasContent = Object.values(metadata).some((value) => {
+    if (Array.isArray(value)) return value.length > 0;
+    return value !== undefined && value !== null && value !== '';
+  });
+
+  return hasContent ? JSON.stringify(metadata) : null;
+}
+
+type CategoryLink = { id: string; parent_id: string | null };
+
+async function collectCategoryIdsWithDescendants(db: Env['DB'], categoryId: string): Promise<string[]> {
+  const rows = await db
+    .prepare('SELECT id, parent_id FROM categories WHERE status = "active"')
+    .all<CategoryLink>()
+    .then((r) => r.results);
+
+  const childrenMap = new Map<string, string[]>();
+  rows.forEach((row) => {
+    if (row.parent_id) {
+      if (!childrenMap.has(row.parent_id)) childrenMap.set(row.parent_id, []);
+      childrenMap.get(row.parent_id)?.push(row.id);
+    }
+  });
+
+  const ids = new Set<string>();
+  const stack = [categoryId];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || ids.has(current)) continue;
+    ids.add(current);
+    const children = childrenMap.get(current) ?? [];
+    children.forEach((child) => stack.push(child));
+  }
+
+  return Array.from(ids);
 }
 
 type CommentRow = {
@@ -54,6 +166,7 @@ type CommentRow = {
   status: string;
   created_at: string;
   updated_at: string;
+  kind?: string | null;
   user_name: string;
   user_avatar: string | null;
 };
@@ -67,6 +180,7 @@ type CommentNode = {
   status: string;
   created_at: string;
   updated_at: string;
+  kind?: string | null;
   user: {
     id: string;
     name: string;
@@ -82,18 +196,26 @@ const COMMENT_SORT_ORDER: Record<CommentSort, string> = {
   oldest: 'c.created_at ASC',
 };
 
+const COMMENT_KINDS = new Set(['opinion', 'suggestion', 'issue', 'praise', 'other', 'general']);
+
 export const websitesRouter = new Hono<{ Bindings: Env } & AuthContext>();
 
 websitesRouter.post('/', requireAuth, async (c) => {
   try {
-    let body: { name?: unknown; url?: unknown; description?: unknown; category_id?: unknown };
+    let body: {
+      name?: unknown;
+      url?: unknown;
+      description?: unknown;
+      category_id?: unknown;
+      metadata?: unknown;
+    };
     try {
       body = await c.req.json();
     } catch {
       return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
     }
 
-    const { name, url, description, category_id } = body;
+    const { name, url, description, category_id, metadata } = body;
 
     if (typeof name !== 'string' || name.trim().length < MIN_NAME_LENGTH) {
       return c.json(
@@ -125,6 +247,8 @@ websitesRouter.post('/', requireAuth, async (c) => {
       normalizedDescription = description.trim();
     }
 
+    const normalizedMetadata = normalizeWebsiteMetadata(metadata);
+
     const category = await c.env.DB.prepare(
       'SELECT id FROM categories WHERE id = ? AND status = "active"',
     )
@@ -148,22 +272,33 @@ websitesRouter.post('/', requireAuth, async (c) => {
     const userId = c.get('userId');
 
     await c.env.DB.prepare(
-      `INSERT INTO websites (id, name, url, description, category_id, status, submitted_by, featured, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'pending', ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      `INSERT INTO websites (id, name, url, description, category_id, status, submitted_by, featured, metadata, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'pending', ?, 0, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     )
-      .bind(id, name.trim(), normalizedUrl, normalizedDescription, category_id, userId)
+      .bind(id, name.trim(), normalizedUrl, normalizedDescription, category_id, userId, normalizedMetadata)
       .run();
 
     const created = await c.env.DB.prepare(
-      `SELECT w.*, cat.name AS category_name, cat.slug AS category_slug
+      `SELECT w.*, cat.name AS category_name, cat.slug AS category_slug, u.name AS owner_name
        FROM websites w
        LEFT JOIN categories cat ON cat.id = w.category_id
+       LEFT JOIN users u ON u.id = w.submitted_by
        WHERE w.id = ?`,
     )
       .bind(id)
       .first<WebsiteRow>();
 
-    return c.json(createSuccess(created), 201);
+    return c.json(
+      createSuccess(
+        created
+          ? {
+              ...created,
+              metadata: parseMetadata(created.metadata),
+            }
+          : created,
+      ),
+      201,
+    );
   } catch (err) {
     console.error('[websites POST /]', err);
     return c.json(createError('INTERNAL_ERROR', 'Não foi possível criar o website'), 500);
@@ -208,6 +343,7 @@ websitesRouter.get('/', async (c) => {
     const { page, perPage, offset } = getPaginationParams(url);
 
     const categoryId = url.searchParams.get('category_id');
+    const includeDescendants = url.searchParams.get('include_descendants') === 'true';
     const search = url.searchParams.get('search');
     const sortParam = url.searchParams.get('sort');
     const sort: SortOption = isValidSort(sortParam) ? sortParam : 'recent';
@@ -217,8 +353,17 @@ websitesRouter.get('/', async (c) => {
     const bindings: (string | number)[] = [];
 
     if (categoryId) {
-      conditions.push('w.category_id = ?');
-      bindings.push(categoryId);
+      const categoryIds = includeDescendants
+        ? await collectCategoryIdsWithDescendants(c.env.DB, categoryId)
+        : [categoryId];
+
+      if (categoryIds.length > 1) {
+        conditions.push(`w.category_id IN (${categoryIds.map(() => '?').join(',')})`);
+        bindings.push(...categoryIds);
+      } else {
+        conditions.push('w.category_id = ?');
+        bindings.push(categoryId);
+      }
     }
 
     if (search) {
@@ -232,6 +377,7 @@ websitesRouter.get('/', async (c) => {
     const baseQuery = `
       FROM websites w
       LEFT JOIN categories cat ON cat.id = w.category_id
+      LEFT JOIN users u ON u.id = w.submitted_by
       LEFT JOIN (
         SELECT website_id, AVG(CAST(score AS REAL)) AS avg_rating, COUNT(*) AS rating_count
         FROM ratings
@@ -251,7 +397,9 @@ websitesRouter.get('/', async (c) => {
          w.id, w.name, w.url, w.description, w.logo_url, w.screenshot_url,
          w.category_id, cat.name AS category_name, cat.slug AS category_slug,
          w.status, w.featured, w.created_at, w.updated_at,
-         r.avg_rating, COALESCE(r.rating_count, 0) AS rating_count
+         w.metadata,
+         r.avg_rating, COALESCE(r.rating_count, 0) AS rating_count,
+         u.name AS owner_name
        ${baseQuery}
        ORDER BY ${orderClause}
        LIMIT ? OFFSET ?`,
@@ -262,7 +410,14 @@ websitesRouter.get('/', async (c) => {
 
     const meta = buildPaginationMeta(total, page, perPage);
 
-    return c.json(createSuccess(rows, meta));
+    const data = rows.map((row) => ({
+      ...row,
+      featured: Boolean(row.featured),
+      metadata: parseMetadata(row.metadata),
+      owner_name: row.owner_name ?? null,
+    }));
+
+    return c.json(createSuccess(data, meta));
   } catch (err) {
     console.error('[websites GET /]', err);
     return c.json(createError('INTERNAL_ERROR', 'Failed to fetch websites'), 500);
@@ -277,15 +432,17 @@ websitesRouter.get('/:id', optionalAuth, async (c) => {
       SELECT
          w.id, w.name, w.url, w.description, w.logo_url, w.screenshot_url,
          w.category_id, cat.name AS category_name, cat.slug AS category_slug,
-         w.status, w.featured, w.created_at, w.updated_at,
+         w.status, w.featured, w.created_at, w.updated_at, w.metadata,
          AVG(CAST(r.score AS REAL)) AS avg_rating,
          COALESCE(COUNT(r.id), 0) AS rating_count,
-         COALESCE(cmt.comment_count, 0) AS comment_count
+         COALESCE(cmt.comment_count, 0) AS comment_count,
+         u.name AS owner_name
     `;
 
     const joinsBase = `
        FROM websites w
        LEFT JOIN categories cat ON cat.id = w.category_id
+       LEFT JOIN users u ON u.id = w.submitted_by
        LEFT JOIN ratings r ON r.website_id = w.id
        LEFT JOIN (
          SELECT website_id, COUNT(*) AS comment_count
@@ -305,19 +462,19 @@ websitesRouter.get('/:id', optionalAuth, async (c) => {
     if (userId) {
       website = await c.env.DB.prepare(
         `${selectBase},
-         ur.score AS user_rating
-         ${joinsBase}
-         LEFT JOIN ratings ur ON ur.website_id = w.id AND ur.user_id = ?
-         ${whereClause}`,
+          ur.score AS user_rating
+          ${joinsBase}
+          LEFT JOIN ratings ur ON ur.website_id = w.id AND ur.user_id = ?
+          ${whereClause}`,
       )
         .bind(userId, id)
         .first<WebsiteRow>();
     } else {
       website = await c.env.DB.prepare(
         `${selectBase},
-         NULL AS user_rating
-         ${joinsBase}
-         ${whereClause}`,
+          NULL AS user_rating
+          ${joinsBase}
+          ${whereClause}`,
       )
         .bind(id)
         .first<WebsiteRow>();
@@ -327,7 +484,13 @@ websitesRouter.get('/:id', optionalAuth, async (c) => {
       return c.json(createError('NOT_FOUND', `Website '${id}' not found`), 404);
     }
 
-    return c.json(createSuccess(website));
+    return c.json(
+      createSuccess({
+        ...website,
+        featured: Boolean(website.featured),
+        metadata: parseMetadata(website.metadata),
+      }),
+    );
   } catch (err) {
     console.error('[websites GET /:id]', err);
     return c.json(createError('INTERNAL_ERROR', 'Failed to fetch website'), 500);
@@ -430,6 +593,7 @@ websitesRouter.get('/:id/comments', optionalAuth, async (c) => {
       status: row.status,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      kind: row.kind ?? 'general',
       user: {
         id: row.user_id,
         name: row.user_name,
@@ -472,14 +636,14 @@ websitesRouter.post('/:id/comments', requireAuth, async (c) => {
       return c.json(createError('NOT_FOUND', 'Website não encontrado'), 404);
     }
 
-    let body: { content?: unknown; parentId?: unknown };
+    let body: { content?: unknown; parentId?: unknown; kind?: unknown };
     try {
       body = await c.req.json();
     } catch {
       return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
     }
 
-    const { content, parentId } = body;
+    const { content, parentId, kind } = body;
     if (
       typeof content !== 'string' ||
       content.trim().length < MIN_COMMENT_LENGTH ||
@@ -510,12 +674,20 @@ websitesRouter.post('/:id/comments', requireAuth, async (c) => {
       }
     }
 
+    let normalizedKind = 'general';
+    if (kind !== undefined && kind !== null) {
+      if (typeof kind !== 'string' || !COMMENT_KINDS.has(kind)) {
+        return c.json(createError('VALIDATION_ERROR', 'Tipo de comentário inválido'), 400);
+      }
+      normalizedKind = kind;
+    }
+
     const commentId = generateId();
 
     await c.env.DB.prepare(
-      'INSERT INTO comments (id, website_id, user_id, content, parent_id, status) VALUES (?, ?, ?, ?, ?, "visible")',
+      'INSERT INTO comments (id, website_id, user_id, content, parent_id, status, kind) VALUES (?, ?, ?, ?, ?, "visible", ?)',
     )
-      .bind(commentId, id, userId, content.trim(), parentId ?? null)
+      .bind(commentId, id, userId, content.trim(), parentId ?? null, normalizedKind)
       .run();
 
     const inserted = await c.env.DB.prepare(
@@ -540,6 +712,7 @@ websitesRouter.post('/:id/comments', requireAuth, async (c) => {
       status: inserted.status,
       created_at: inserted.created_at,
       updated_at: inserted.updated_at,
+      kind: inserted.kind ?? 'general',
       user: {
         id: inserted.user_id,
         name: inserted.user_name,

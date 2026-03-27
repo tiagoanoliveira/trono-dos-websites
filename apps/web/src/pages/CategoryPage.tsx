@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { cn } from '@/lib/utils';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { cn, truncate } from '@/lib/utils';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { WebsiteCard } from '@/components/features/WebsiteCard';
 import { useCategoryBySlug } from '@/hooks/useCategories';
 import { useWebsites, type WebsiteFilters } from '@/hooks/useWebsites';
+import { useAuthStore } from '@/stores/authStore';
+import { api } from '@/lib/api';
+import type { PaginatedResponse, Website } from '@/types';
 
 type SortOption = 'rating' | 'date' | 'popularity' | 'featured';
 
@@ -20,17 +23,58 @@ export function CategoryPage() {
   const { slug = '' } = useParams<{ slug: string }>();
   const [sort, setSort] = useState<SortOption>('rating');
   const [page, setPage] = useState(1);
+  const { isAuthenticated } = useAuthStore();
+  const queryClient = useQueryClient();
 
   const { category, isLoading: categoryLoading, error: categoryError } = useCategoryBySlug(slug);
 
-  const filters: WebsiteFilters = {
-    category_id: category?.id,
-    sort,
-    page,
-    perPage: 12,
-  };
+  const filters: WebsiteFilters = useMemo(
+    () => ({
+      category_id: category?.id,
+      sort,
+      page,
+      perPage: 24,
+      includeDescendants: true,
+    }),
+    [category?.id, page, sort],
+  );
 
   const { websites, meta, isLoading: websitesLoading } = useWebsites(filters);
+
+  const voteMutation = useMutation({
+    mutationFn: async ({ websiteId, score }: { websiteId: string; score: number }) => {
+      const res = await api.post<{
+        avg_rating: number;
+        rating_count: number;
+        user_rating?: number | null;
+      }>(`/websites/${websiteId}/ratings`, { score });
+
+      if (!res.success || !res.data) {
+        throw new Error(res.error?.message ?? 'Erro ao votar');
+      }
+
+      return { ...res.data, websiteId, score };
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData<PaginatedResponse<Website> | undefined>(['websites', filters], (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          data: prev.data.map((site) =>
+            site.id === data.websiteId
+              ? {
+                  ...site,
+                  avg_rating: data.avg_rating,
+                  rating_count: data.rating_count,
+                  user_rating: data.user_rating ?? data.score,
+                }
+              : site,
+          ),
+        };
+      });
+      queryClient.invalidateQueries({ queryKey: ['websites', data.websiteId] });
+    },
+  });
 
   if (categoryLoading) {
     return (
@@ -85,7 +129,7 @@ export function CategoryPage() {
             )}
             {category.websiteCount !== undefined && (
               <p className="mt-2 text-sm text-throne-400">
-                {category.websiteCount} {category.websiteCount === 1 ? 'website' : 'websites'}
+                {category.websiteCount} {category.websiteCount === 1 ? 'website' : 'websites'} (inclui subcategorias)
               </p>
             )}
           </div>
@@ -146,11 +190,11 @@ export function CategoryPage() {
           </div>
         </div>
 
-        {/* Website grid */}
+        {/* Website list */}
         {websitesLoading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-3">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="card h-48 animate-pulse bg-throne-100" />
+              <div key={i} className="card h-32 animate-pulse bg-throne-100" />
             ))}
           </div>
         ) : websites.length === 0 ? (
@@ -165,9 +209,17 @@ export function CategoryPage() {
             }
           />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-3">
             {websites.map((site) => (
-              <WebsiteCard key={site.id} website={site} />
+              <WebsiteListRow
+                key={site.id}
+                website={site}
+                onVote={(direction) =>
+                  voteMutation.mutate({ websiteId: site.id, score: direction === 'up' ? 5 : 1 })
+                }
+                voting={voteMutation.isPending && voteMutation.variables?.websiteId === site.id}
+                disabled={!isAuthenticated}
+              />
             ))}
           </div>
         )}
@@ -198,6 +250,217 @@ export function CategoryPage() {
         )}
       </div>
     </div>
+  );
+}
+
+function WebsiteListRow({
+  website,
+  onVote,
+  voting,
+  disabled,
+}: {
+  website: Website;
+  onVote: (direction: 'up' | 'down') => void;
+  voting: boolean;
+  disabled: boolean;
+}) {
+  const votes = calculateVoteBreakdown(website);
+  const metadata = website.metadata;
+  const launchLabel = formatLaunchDate(metadata?.launch_date, metadata?.launch_precision);
+  const languagesLabel = metadata?.languages?.join(', ');
+  const isOpenSource = metadata?.is_open_source;
+  const sourceUrl = metadata?.source_url;
+
+  return (
+    <div className="flex gap-4 rounded-xl border border-throne-100 bg-white p-4 shadow-sm">
+      <div className="flex flex-col items-center rounded-lg bg-throne-50 px-3 py-2 text-sm font-medium text-throne-600">
+        <button
+          type="button"
+          onClick={() => onVote('up')}
+          disabled={disabled || voting}
+          className={cn(
+            'transition-colors',
+            disabled ? 'text-throne-300 cursor-not-allowed' : 'hover:text-crown-600',
+          )}
+          title={disabled ? 'Entra para votar' : 'Upvote'}
+        >
+          ▲
+        </button>
+        <span className="text-base font-semibold text-throne-900">{votes.score}</span>
+        <button
+          type="button"
+          onClick={() => onVote('down')}
+          disabled={disabled || voting}
+          className={cn(
+            'transition-colors',
+            disabled ? 'text-throne-300 cursor-not-allowed' : 'hover:text-crown-600',
+          )}
+          title={disabled ? 'Entra para votar' : 'Downvote'}
+        >
+          ▼
+        </button>
+      </div>
+
+      <div className="flex-1 space-y-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <Link
+              to={`/website/${website.id}`}
+              className="text-lg font-semibold text-throne-900 hover:text-crown-600 transition-colors line-clamp-1"
+            >
+              {website.name}
+            </Link>
+            <p className="text-xs text-throne-500">
+              {website.category_slug ? (
+                <Link
+                  to={`/categoria/${website.category_slug}`}
+                  className="font-medium text-throne-600 hover:text-crown-700"
+                >
+                  c/{website.category_slug}
+                </Link>
+              ) : (
+                <span className="font-medium text-throne-600">c/geral</span>
+              )}{' '}
+              · {website.owner_name ? `por ${website.owner_name}` : 'autor desconhecido'}
+            </p>
+          </div>
+          <a
+            href={website.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-primary btn-sm whitespace-nowrap"
+          >
+            Visitar
+          </a>
+        </div>
+
+        {website.description && (
+          <p className="text-sm text-throne-600 leading-relaxed">{truncate(website.description, 200)}</p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-3 text-xs text-throne-500">
+          {launchLabel && (
+            <span className="flex items-center gap-1">
+              <CalendarIcon className="h-3.5 w-3.5" />
+              Lançamento: {launchLabel}
+            </span>
+          )}
+          {languagesLabel && (
+            <span className="flex items-center gap-1">
+              <CodeIcon className="h-3.5 w-3.5" />
+              {languagesLabel}
+            </span>
+          )}
+          {isOpenSource !== undefined && (
+            <span className="flex items-center gap-1">
+              <GithubIcon className="h-3.5 w-3.5" />
+              {isOpenSource ? (
+                sourceUrl ? (
+                  <a
+                    href={sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-crown-600 hover:text-crown-700"
+                  >
+                    Código aberto
+                  </a>
+                ) : (
+                  'Código aberto'
+                )
+              ) : (
+                'Código fechado'
+              )}
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-4 text-xs text-throne-500">
+          <span className="flex items-center gap-1">
+            <ArrowUpIcon className="h-3 w-3" />
+            {votes.upvotes} upvotes
+          </span>
+          <span className="flex items-center gap-1">
+            <ArrowDownIcon className="h-3 w-3" />
+            {votes.downvotes} downvotes
+          </span>
+          <span>⭐ {(website.avg_rating ?? 0).toFixed(1)}</span>
+          <span>{website.rating_count ?? 0} votos</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function calculateVoteBreakdown(website: Website) {
+  const total = website.rating_count ?? 0;
+  const avg = website.avg_rating ?? 0;
+  if (!total) return { upvotes: 0, downvotes: 0, score: 0 };
+
+  const estimatedUpvotes = Math.max(0, Math.min(total, Math.round(((avg - 1) / 4) * total)));
+  const downvotes = Math.max(0, total - estimatedUpvotes);
+  return {
+    upvotes: estimatedUpvotes,
+    downvotes,
+    score: estimatedUpvotes - downvotes,
+  };
+}
+
+function formatLaunchDate(
+  value?: string | null,
+  precision?: 'exact' | 'month' | 'year' | 'unknown' | null,
+) {
+  if (!value) return null;
+  try {
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return value;
+
+    if (precision === 'year') return String(dt.getUTCFullYear());
+    if (precision === 'month') {
+      return dt.toLocaleDateString('pt-PT', { year: 'numeric', month: 'short' });
+    }
+    return dt.toLocaleDateString('pt-PT');
+  } catch {
+    return value;
+  }
+}
+
+function CalendarIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function CodeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16 18l6-6-6-6M8 6l-6 6 6 6" />
+    </svg>
+  );
+}
+
+function GithubIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 .5C5.73.5.5 5.74.5 12.02c0 5.11 3.29 9.44 7.86 10.98.58.11.79-.25.79-.56v-2.02c-3.2.7-3.87-1.54-3.87-1.54-.52-1.33-1.27-1.69-1.27-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.02 1.74 2.68 1.24 3.33.95.1-.74.4-1.24.73-1.53-2.55-.29-5.23-1.28-5.23-5.71 0-1.26.45-2.29 1.18-3.09-.12-.29-.51-1.45.11-3.02 0 0 .96-.31 3.14 1.18a10.9 10.9 0 0 1 2.86-.39c.97 0 1.95.13 2.86.39 2.17-1.49 3.13-1.18 3.13-1.18.63 1.57.24 2.73.12 3.02.73.8 1.18 1.83 1.18 3.1 0 4.44-2.68 5.41-5.24 5.7.41.36.78 1.07.78 2.16v3.2c0 .31.21.68.8.56A10.53 10.53 0 0 0 23.5 12C23.5 5.74 18.27.5 12 .5Z" />
+    </svg>
+  );
+}
+
+function ArrowUpIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+    </svg>
+  );
+}
+
+function ArrowDownIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+    </svg>
   );
 }
 

@@ -51,6 +51,15 @@ export function ProporWebsitePage() {
     description: '',
     category_id: '',
   });
+  const [metadata, setMetadata] = useState({
+    author: '',
+    launchDate: '',
+    launchPrecision: 'unknown' as 'exact' | 'month' | 'year' | 'unknown',
+    languages: '',
+    isOpenSource: false,
+    sourceUrl: '',
+    images: [''],
+  });
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '' });
 
   const categoryOptions = useMemo(() => {
@@ -66,13 +75,38 @@ export function ProporWebsitePage() {
 
   const submitWebsite = useMutation({
     mutationFn: async () => {
-      const res = await api.post<MyWebsite>('/websites', form);
+      const payload = {
+        ...form,
+        metadata: {
+          author: metadata.author || undefined,
+          launchDate: metadata.launchDate || undefined,
+          launchPrecision: metadata.launchPrecision,
+          languages: metadata.languages
+            .split(',')
+            .map((lang) => lang.trim())
+            .filter(Boolean),
+          images: metadata.images.map((img) => img.trim()).filter(Boolean),
+          isOpenSource: metadata.isOpenSource,
+          sourceUrl: metadata.sourceUrl || undefined,
+        },
+      };
+
+      const res = await api.post<MyWebsite>('/websites', payload);
       if (!res.success || !res.data) throw new Error(res.error?.message ?? 'Erro ao submeter');
       return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-websites'] });
       setForm({ name: '', url: '', description: '', category_id: '' });
+      setMetadata({
+        author: '',
+        launchDate: '',
+        launchPrecision: 'unknown',
+        languages: '',
+        isOpenSource: false,
+        sourceUrl: '',
+        images: [''],
+      });
     },
   });
 
@@ -199,6 +233,100 @@ export function ProporWebsitePage() {
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="label">Autor / Equipa</label>
+              <input
+                className="input"
+                placeholder="Ex: Tiago Oliveira ou Equipa XPTO"
+                value={metadata.author}
+                onChange={(e) => setMetadata((m) => ({ ...m, author: e.target.value }))}
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="label">Data de lançamento</label>
+                <input
+                  className="input"
+                  type={metadata.launchPrecision === 'exact' ? 'date' : metadata.launchPrecision === 'month' ? 'month' : 'text'}
+                  placeholder="AAAA-MM ou AAAA"
+                  value={metadata.launchDate}
+                  onChange={(e) => setMetadata((m) => ({ ...m, launchDate: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label">Precisão</label>
+                <select
+                  className="input"
+                  value={metadata.launchPrecision}
+                  onChange={(e) =>
+                    setMetadata((m) => ({ ...m, launchPrecision: e.target.value as typeof m.launchPrecision }))
+                  }
+                >
+                  <option value="exact">Data exata</option>
+                  <option value="month">Mês + ano</option>
+                  <option value="year">Só ano</option>
+                  <option value="unknown">Não sei</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="label">Linguagens utilizadas</label>
+              <input
+                className="input"
+                placeholder="Ex: TypeScript, Go, Rust"
+                value={metadata.languages}
+                onChange={(e) => setMetadata((m) => ({ ...m, languages: e.target.value }))}
+              />
+              <p className="mt-1 text-xs text-throne-500">Separa com vírgulas</p>
+            </div>
+            <div className="space-y-2">
+              <label className="label">Fotos (URLs)</label>
+              {metadata.images.map((img, idx) => (
+                <div key={idx} className="flex gap-2">
+                  <input
+                    className="input flex-1"
+                    placeholder="https://..."
+                    value={img}
+                    onChange={(e) =>
+                      setMetadata((m) => ({
+                        ...m,
+                        images: m.images.map((current, currentIdx) =>
+                          currentIdx === idx ? e.target.value : current,
+                        ),
+                      }))
+                    }
+                  />
+                  {idx === metadata.images.length - 1 && (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setMetadata((m) => ({ ...m, images: [...m.images, ''] }))}
+                    >
+                      + Foto
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-throne-700">
+                <input
+                  type="checkbox"
+                  checked={metadata.isOpenSource}
+                  onChange={(e) => setMetadata((m) => ({ ...m, isOpenSource: e.target.checked }))}
+                />
+                É open-source?
+              </label>
+              {metadata.isOpenSource && (
+                <input
+                  className="input"
+                  type="url"
+                  placeholder="Link para o repositório"
+                  value={metadata.sourceUrl}
+                  onChange={(e) => setMetadata((m) => ({ ...m, sourceUrl: e.target.value }))}
+                />
+              )}
             </div>
             {submitWebsite.error && (
               <p className="text-sm text-red-600">

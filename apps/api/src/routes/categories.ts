@@ -16,9 +16,7 @@ type CategoryRow = {
   website_count: number;
 };
 
-type CategoryWithChildren = Omit<CategoryRow, 'parent_id'> & {
-  children: CategoryRow[];
-};
+type CategoryNode = CategoryRow & { children: CategoryNode[] };
 
 type CategorySuggestionRow = {
   id: string;
@@ -108,6 +106,45 @@ categoriesRouter.get('/suggestions/mine', requireAuth, async (c) => {
   }
 });
 
+type SerializedCategory = Omit<CategoryRow, 'parent_id'> & { children: SerializedCategory[] };
+
+function serializeCategory(node: CategoryNode): SerializedCategory {
+  const serializedChildren = node.children.map(serializeCategory);
+  const childrenTotal = serializedChildren.reduce((sum, child) => sum + child.website_count, 0);
+  const { parent_id: _omit, ...rest } = node;
+
+  return {
+    ...rest,
+    website_count: node.website_count + childrenTotal,
+    children: serializedChildren,
+  };
+}
+
+function buildCategoryTree(rows: CategoryRow[]) {
+  const nodes = new Map<string, CategoryNode>();
+  const slugMap = new Map<string, CategoryNode>();
+
+  rows.forEach((row) => {
+    const node: CategoryNode = { ...row, children: [] };
+    nodes.set(node.id, node);
+    slugMap.set(node.slug, node);
+  });
+
+  nodes.forEach((node) => {
+    if (node.parent_id && nodes.has(node.parent_id)) {
+      nodes.get(node.parent_id)?.children.push(node);
+    }
+  });
+
+  const roots = Array.from(nodes.values()).filter((node) => node.parent_id === null);
+
+  return {
+    roots: roots.map(serializeCategory),
+    nodes,
+    slugMap,
+  };
+}
+
 categoriesRouter.get('/', async (c) => {
   try {
     const { searchParams } = new URL(c.req.url);
@@ -127,24 +164,14 @@ categoriesRouter.get('/', async (c) => {
       .all<CategoryRow>()
       .then((r) => r.results);
 
+    const { roots, nodes } = buildCategoryTree(rows);
+
     if (parentIdFilter !== null) {
-      const filtered = rows.filter((r) => r.parent_id === parentIdFilter);
-      return c.json(createSuccess(filtered));
+      const children = Array.from(nodes.values()).filter((node) => node.parent_id === parentIdFilter);
+      return c.json(createSuccess(children.map(serializeCategory)));
     }
 
-    // Build hierarchical structure: parents with embedded children
-    const parents = rows.filter((r) => r.parent_id === null);
-    const children = rows.filter((r) => r.parent_id !== null);
-
-    const data: CategoryWithChildren[] = parents.map((parent) => {
-      const { parent_id: _omit, ...rest } = parent;
-      return {
-        ...rest,
-        children: children.filter((ch) => ch.parent_id === parent.id),
-      };
-    });
-
-    return c.json(createSuccess(data));
+    return c.json(createSuccess(roots));
   } catch (err) {
     console.error('[categories GET /]', err);
     return c.json(createError('INTERNAL_ERROR', 'Failed to fetch categories'), 500);
@@ -155,24 +182,29 @@ categoriesRouter.get('/:slug', async (c) => {
   try {
     const { slug } = c.req.param();
 
-    const category = await c.env.DB.prepare(
+    const rows = await c.env.DB.prepare(
       `SELECT
          c.id, c.name, c.slug, c.description, c.icon, c.parent_id, c.status, c.created_at,
          COUNT(w.id) AS website_count
        FROM categories c
        LEFT JOIN websites w
          ON w.category_id = c.id AND w.status = 'approved'
-       WHERE c.slug = ? AND c.status = 'active'
+       WHERE c.status = 'active'
        GROUP BY c.id`,
     )
-      .bind(slug)
-      .first<CategoryRow>();
+      .all<CategoryRow>()
+      .then((r) => r.results);
 
-    if (!category) {
+    const { slugMap } = buildCategoryTree(rows);
+    const node = slugMap.get(slug);
+
+    if (!node) {
       return c.json(createError('NOT_FOUND', `Category '${slug}' not found`), 404);
     }
 
-    return c.json(createSuccess(category));
+    // If the node is not a root, ensure its subtree is still fully serialized
+    const serialized = serializeCategory(node);
+    return c.json(createSuccess(serialized));
   } catch (err) {
     console.error('[categories GET /:slug]', err);
     return c.json(createError('INTERNAL_ERROR', 'Failed to fetch category'), 500);

@@ -27,7 +27,7 @@ export function useAddComment(websiteId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (payload: { content: string; parentId?: string | null }) => {
+    mutationFn: async (payload: { content: string; parentId?: string | null; kind?: string }) => {
       const res = await api.post<Comment>(`/websites/${websiteId}/comments`, payload);
       if (!res.success || !res.data) {
         throw new Error(res.error?.message ?? 'Erro ao enviar comentário');

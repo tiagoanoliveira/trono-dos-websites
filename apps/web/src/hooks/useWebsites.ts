@@ -8,6 +8,7 @@ export interface WebsiteFilters {
   sort?: 'rating' | 'recent' | 'featured' | 'date' | 'popularity';
   page?: number;
   perPage?: number;
+  includeDescendants?: boolean;
 }
 
 export function useWebsites(filters: WebsiteFilters = {}) {
@@ -18,6 +19,7 @@ export function useWebsites(filters: WebsiteFilters = {}) {
   if (filters.sort) params.sort = filters.sort;
   if (filters.page) params.page = String(filters.page);
   if (filters.perPage) params.perPage = String(filters.perPage);
+  if (filters.includeDescendants) params.include_descendants = 'true';
 
   const query = useQuery({
     queryKey: ['websites', filters],

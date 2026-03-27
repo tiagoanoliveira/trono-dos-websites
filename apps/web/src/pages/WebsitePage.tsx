@@ -33,6 +33,13 @@ export function WebsitePage() {
     setUserRating(website?.user_rating ?? 0);
   }, [website?.user_rating]);
 
+  const metadata = website?.metadata ?? null;
+  const launchLabel = formatLaunchDate(metadata?.launch_date, metadata?.launch_precision);
+  const languagesLabel = metadata?.languages?.join(', ');
+  const isOpenSource = metadata?.is_open_source;
+  const sourceUrl = metadata?.source_url;
+  const images = metadata?.images;
+
   const ratingMutation = useMutation({
     mutationFn: async (score: number) => {
       const res = await api.post<{ avg_rating: number; rating_count: number; user_rating?: number | null }>(
@@ -170,6 +177,45 @@ export function WebsitePage() {
                   <CalendarIcon className="h-4 w-4" />
                   Adicionado a {formatDate(website.created_at)}
                 </span>
+                {metadata?.author && (
+                  <span className="flex items-center gap-1">
+                    <UserIcon className="h-4 w-4" />
+                    {metadata?.author}
+                  </span>
+                )}
+                {launchLabel && (
+                  <span className="flex items-center gap-1">
+                    <CalendarIcon className="h-4 w-4" />
+                    Lançado: {launchLabel}
+                  </span>
+                )}
+                {languagesLabel && (
+                  <span className="flex items-center gap-1">
+                    <CodeIcon className="h-4 w-4" />
+                    {languagesLabel}
+                  </span>
+                )}
+                {isOpenSource !== undefined && (
+                  <span className="flex items-center gap-1">
+                    <GithubIcon className="h-4 w-4" />
+                    {isOpenSource ? (
+                      sourceUrl ? (
+                        <a
+                          href={sourceUrl}
+                          className="text-crown-600 hover:text-crown-700"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Código aberto
+                        </a>
+                      ) : (
+                        'Código aberto'
+                      )
+                    ) : (
+                      'Código fechado'
+                    )}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -196,6 +242,22 @@ export function WebsitePage() {
               alt={`Captura de ecrã de ${website.name}`}
               className="w-full object-cover"
             />
+          </div>
+        )}
+
+        {images && images.length > 0 && (
+          <div className="card p-4 space-y-3">
+            <h3 className="text-lg font-semibold text-throne-900">Fotos do projeto</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {images.map((img, idx) => (
+                <img
+                  key={`${img}-${idx}`}
+                  src={img}
+                  alt={`Imagem ${idx + 1} de ${website.name}`}
+                  className="w-full rounded-lg border border-throne-100 object-cover"
+                />
+              ))}
+            </div>
           </div>
         )}
 
@@ -339,13 +401,14 @@ function CommentsSection({
   totalComments: number;
   isAuthenticated: boolean;
   onLogin: () => void;
-  onSubmit: (payload: { content: string; parentId?: string | null }) => Promise<unknown>;
+  onSubmit: (payload: { content: string; parentId?: string | null; kind?: string }) => Promise<unknown>;
   isSubmitting: boolean;
   errorMessage?: string;
 }) {
   const [content, setContent] = useState('');
   const [formError, setFormError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [kind, setKind] = useState('opinion');
 
   const handleSubmit = async () => {
     setFormError('');
@@ -355,8 +418,9 @@ function CommentsSection({
       return;
     }
     try {
-      await onSubmit({ content: content.trim() });
+      await onSubmit({ content: content.trim(), kind });
       setContent('');
+      setKind('opinion');
       setSuccessMsg('Comentário publicado!');
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Não foi possível publicar o comentário.');
@@ -386,6 +450,18 @@ function CommentsSection({
             onChange={(e) => setContent(e.target.value)}
             maxLength={1000}
           />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <label className="label">Tipo de comentário</label>
+              <select className="input" value={kind} onChange={(e) => setKind(e.target.value)}>
+                <option value="opinion">Opinião</option>
+                <option value="suggestion">Sugestão</option>
+                <option value="issue">Erro/bug</option>
+                <option value="praise">Elogio</option>
+                <option value="other">Outro</option>
+              </select>
+            </div>
+          </div>
           <div className="flex items-center gap-3">
             <button
               className={cn('btn-primary', isSubmitting && 'opacity-60 cursor-not-allowed')}
@@ -447,11 +523,12 @@ function CommentItem({
   comment: Comment;
   isAuthenticated: boolean;
   onLogin: () => void;
-  onSubmit: (payload: { content: string; parentId?: string | null }) => Promise<unknown>;
+  onSubmit: (payload: { content: string; parentId?: string | null; kind?: string }) => Promise<unknown>;
   isSubmitting: boolean;
 }) {
   const [replying, setReplying] = useState(false);
   const [replyText, setReplyText] = useState('');
+  const [replyKind, setReplyKind] = useState('opinion');
   const [error, setError] = useState('');
 
   const handleReply = async () => {
@@ -461,8 +538,9 @@ function CommentItem({
       return;
     }
     try {
-      await onSubmit({ content: replyText.trim(), parentId: comment.id });
+      await onSubmit({ content: replyText.trim(), parentId: comment.id, kind: replyKind });
       setReplyText('');
+      setReplyKind('opinion');
       setReplying(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível enviar a resposta.');
@@ -477,6 +555,11 @@ function CommentItem({
           <div className="flex items-center gap-2">
             <p className="font-semibold text-throne-800">{comment.user.name}</p>
             <span className="text-xs text-throne-400">{formatDate(comment.created_at)}</span>
+            {comment.kind && (
+              <span className="rounded-full bg-throne-100 px-2 py-0.5 text-[11px] font-medium text-throne-600">
+                {getCommentKindLabel(comment.kind)}
+              </span>
+            )}
           </div>
           <p className="text-throne-700 leading-relaxed">{comment.content}</p>
           <div className="mt-2 flex items-center gap-3 text-sm text-throne-500">
@@ -498,6 +581,18 @@ function CommentItem({
                 onChange={(e) => setReplyText(e.target.value)}
                 placeholder="Responder a este comentário..."
               />
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="label">Tipo</label>
+                  <select className="input" value={replyKind} onChange={(e) => setReplyKind(e.target.value)}>
+                    <option value="opinion">Opinião</option>
+                    <option value="suggestion">Sugestão</option>
+                    <option value="issue">Erro/bug</option>
+                    <option value="praise">Elogio</option>
+                    <option value="other">Outro</option>
+                  </select>
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   className={cn('btn-primary', isSubmitting && 'opacity-60 cursor-not-allowed')}
@@ -542,6 +637,66 @@ function AvatarBubble({ name, avatarUrl }: { name: string; avatarUrl: string | n
     <div className="h-10 w-10 rounded-full bg-crown-500 text-white flex items-center justify-center font-semibold">
       {initials}
     </div>
+  );
+}
+
+function formatLaunchDate(
+  value?: string | null,
+  precision?: 'exact' | 'month' | 'year' | 'unknown' | null,
+) {
+  if (!value) return null;
+  try {
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return value;
+
+    if (precision === 'year') return String(dt.getUTCFullYear());
+    if (precision === 'month') {
+      return dt.toLocaleDateString('pt-PT', { year: 'numeric', month: 'short' });
+    }
+    return dt.toLocaleDateString('pt-PT');
+  } catch {
+    return value;
+  }
+}
+
+function getCommentKindLabel(kind?: string | null) {
+  switch (kind) {
+    case 'opinion':
+      return 'Opinião';
+    case 'suggestion':
+      return 'Sugestão';
+    case 'issue':
+      return 'Erro/bug';
+    case 'praise':
+      return 'Elogio';
+    case 'other':
+      return 'Outro';
+    default:
+      return 'Comentário';
+  }
+}
+
+function CodeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16 18l6-6-6-6M8 6l-6 6 6 6" />
+    </svg>
+  );
+}
+
+function GithubIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 .5C5.73.5.5 5.74.5 12.02c0 5.11 3.29 9.44 7.86 10.98.58.11.79-.25.79-.56v-2.02c-3.2.7-3.87-1.54-3.87-1.54-.52-1.33-1.27-1.69-1.27-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.02 1.74 2.68 1.24 3.33.95.1-.74.4-1.24.73-1.53-2.55-.29-5.23-1.28-5.23-5.71 0-1.26.45-2.29 1.18-3.09-.12-.29-.51-1.45.11-3.02 0 0 .96-.31 3.14 1.18a10.9 10.9 0 0 1 2.86-.39c.97 0 1.95.13 2.86.39 2.17-1.49 3.13-1.18 3.13-1.18.63 1.57.24 2.73.12 3.02.73.8 1.18 1.83 1.18 3.1 0 4.44-2.68 5.41-5.24 5.7.41.36.78 1.07.78 2.16v3.2c0 .31.21.68.8.56A10.53 10.53 0 0 0 23.5 12C23.5 5.74 18.27.5 12 .5Z" />
+    </svg>
+  );
+}
+
+function UserIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14c-4.418 0-8 1.79-8 4v2h16v-2c0-2.21-3.582-4-8-4z" />
+    </svg>
   );
 }
 
