@@ -47,6 +47,9 @@ export function Header() {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
+            <Link to="/ideias" className="btn-ghost hidden sm:inline-flex">
+              Ideias
+            </Link>
             <Link to="/propor" className="btn-primary hidden sm:inline-flex">
               <PlusIcon className="h-4 w-4" />
               Propor Website
@@ -130,6 +133,9 @@ export function Header() {
             </div>
           </form>
           <div className="flex flex-col gap-2">
+            <Link to="/ideias" className="btn-ghost justify-center">
+              Ideias
+            </Link>
             <Link to="/propor" className="btn-primary justify-center">
               <PlusIcon className="h-4 w-4" />
               Propor Website

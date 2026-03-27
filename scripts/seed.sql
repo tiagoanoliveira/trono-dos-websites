@@ -206,3 +206,25 @@ INSERT INTO category_suggestions (id, name, description, suggested_by, status, c
   ('catsug-demo-001', 'Cidadania Digital', 'Portais para identidades digitais, assinaturas e certificados', 'user-demo-0001', 'pending', CURRENT_TIMESTAMP),
   ('catsug-demo-002', 'Mobilidade Verde', 'Bicicletas partilhadas, trotinetes e carregadores elétricos', 'user-demo-0001', 'approved', CURRENT_TIMESTAMP),
   ('catsug-demo-003', 'Segurança Online', 'Proteção de dados, passwords e monitorização de leaks', 'user-demo-0001', 'rejected', CURRENT_TIMESTAMP);
+
+-- Ideias de sites (fase 5)
+INSERT INTO ideas (id, title, description, status, suggested_by, created_at) VALUES
+  ('idea-0001', 'Mapa de Filas no SNS', 'Mostrar tempos de espera em centros de saúde e urgências em tempo real.', 'open', 'user-demo-0001', CURRENT_TIMESTAMP),
+  ('idea-0002', 'Painel de Faturas e Assinaturas', 'Centraliza serviços, renovações e alerta para aumentos de preço.', 'open', 'user-demo-0001', CURRENT_TIMESTAMP),
+  ('idea-0003', 'Alertas de Concursos Públicos', 'Envio de alertas de concursos relevantes filtrados por área e valor.', 'open', 'user-demo-0001', CURRENT_TIMESTAMP);
+
+INSERT INTO idea_features (id, idea_id, description, created_by, created_at) VALUES
+  ('feat-0001', 'idea-0001', 'Integração com dados públicos do SNS', 'user-demo-0001', CURRENT_TIMESTAMP),
+  ('feat-0002', 'idea-0001', 'Mapa em tempo real com pins por urgência', 'user-demo-0001', CURRENT_TIMESTAMP),
+  ('feat-0003', 'idea-0002', 'Leitura automática de PDFs de fatura', 'user-demo-0001', CURRENT_TIMESTAMP),
+  ('feat-0004', 'idea-0002', 'Alertas de renegociação de tarifários', 'user-demo-0001', CURRENT_TIMESTAMP),
+  ('feat-0005', 'idea-0003', 'Exportação para Excel/CSV', 'user-demo-0001', CURRENT_TIMESTAMP);
+
+INSERT INTO idea_votes (id, idea_id, user_id, value, created_at) VALUES
+  ('vote-0001', 'idea-0001', 'user-demo-0001', 1, CURRENT_TIMESTAMP),
+  ('vote-0002', 'idea-0002', 'user-demo-0001', 1, CURRENT_TIMESTAMP),
+  ('vote-0003', 'idea-0003', 'user-demo-0001', 1, CURRENT_TIMESTAMP);
+
+INSERT INTO idea_comments (id, idea_id, user_id, content, created_at) VALUES
+  ('icom-0001', 'idea-0001', 'user-demo-0001', 'Podemos começar com dados estáticos se não houver API pública.', CURRENT_TIMESTAMP),
+  ('icom-0002', 'idea-0002', 'user-demo-0001', 'Seria útil ler e categorizar despesas automaticamente.', CURRENT_TIMESTAMP);
