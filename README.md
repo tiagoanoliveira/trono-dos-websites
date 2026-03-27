@@ -159,7 +159,7 @@ CREATE TABLE category_suggestions (
 - [x] Respostas a comentários (threading)
 - [x] Ordenação por avaliação/data/popularidade
 ### Fase 4 — Contribuições 
-- [ ] Formulário para propor novo website
+- [x] Formulário para propor novo website
 - [ ] Formulário para sugerir nova categoria
 - [ ] Painel de "minhas contribuições"
 - [ ] Notificações de estado (aprovado/rejeitado)
@@ -248,6 +248,10 @@ npm run dev
 
 # Correr migrações
 npm run db:migrate
+
+# Migrações recentes
+# - 001_add_website_metadata.sql (coluna metadata em websites)
+# - 002_add_comment_kind.sql (tipo de comentário)
 ```
 
 ## 🚀 Deploy na Cloudflare

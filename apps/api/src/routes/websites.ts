@@ -198,6 +198,10 @@ const COMMENT_SORT_ORDER: Record<CommentSort, string> = {
 
 const COMMENT_KINDS = new Set(['opinion', 'suggestion', 'issue', 'praise', 'other', 'general']);
 
+function isMissingMetadataColumn(err: unknown) {
+  return err instanceof Error && err.message.includes('no such column: w.metadata');
+}
+
 export const websitesRouter = new Hono<{ Bindings: Env } & AuthContext>();
 
 websitesRouter.post('/', requireAuth, async (c) => {
@@ -271,22 +275,43 @@ websitesRouter.post('/', requireAuth, async (c) => {
     const id = generateId();
     const userId = c.get('userId');
 
-    await c.env.DB.prepare(
-      `INSERT INTO websites (id, name, url, description, category_id, status, submitted_by, featured, metadata, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'pending', ?, 0, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-    )
-      .bind(id, name.trim(), normalizedUrl, normalizedDescription, category_id, userId, normalizedMetadata)
-      .run();
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO websites (id, name, url, description, category_id, status, submitted_by, featured, metadata, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'pending', ?, 0, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      )
+        .bind(id, name.trim(), normalizedUrl, normalizedDescription, category_id, userId, normalizedMetadata)
+        .run();
+    } catch (err) {
+      if (!isMissingMetadataColumn(err)) throw err;
+      await c.env.DB.prepare(
+        `INSERT INTO websites (id, name, url, description, category_id, status, submitted_by, featured, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'pending', ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      )
+        .bind(id, name.trim(), normalizedUrl, normalizedDescription, category_id, userId)
+        .run();
+    }
 
-    const created = await c.env.DB.prepare(
-      `SELECT w.*, cat.name AS category_name, cat.slug AS category_slug, u.name AS owner_name
-       FROM websites w
-       LEFT JOIN categories cat ON cat.id = w.category_id
-       LEFT JOIN users u ON u.id = w.submitted_by
-       WHERE w.id = ?`,
-    )
-      .bind(id)
-      .first<WebsiteRow>();
+    const fetchCreated = async (includeMetadata: boolean) => {
+      const metadataSelect = includeMetadata ? 'w.metadata,' : '';
+      return c.env.DB.prepare(
+        `SELECT w.*, ${metadataSelect} cat.name AS category_name, cat.slug AS category_slug, u.name AS owner_name
+         FROM websites w
+         LEFT JOIN categories cat ON cat.id = w.category_id
+         LEFT JOIN users u ON u.id = w.submitted_by
+         WHERE w.id = ?`,
+      )
+        .bind(id)
+        .first<WebsiteRow>();
+    };
+
+    let created: WebsiteRow | undefined;
+    try {
+      created = await fetchCreated(true);
+    } catch (err) {
+      if (!isMissingMetadataColumn(err)) throw err;
+      created = await fetchCreated(false);
+    }
 
     return c.json(
       createSuccess(
@@ -392,21 +417,32 @@ websitesRouter.get('/', async (c) => {
 
     const total = countRow?.total ?? 0;
 
-    const rows = await c.env.DB.prepare(
-      `SELECT
-         w.id, w.name, w.url, w.description, w.logo_url, w.screenshot_url,
-         w.category_id, cat.name AS category_name, cat.slug AS category_slug,
-         w.status, w.featured, w.created_at, w.updated_at,
-         w.metadata,
-         r.avg_rating, COALESCE(r.rating_count, 0) AS rating_count,
-         u.name AS owner_name
-       ${baseQuery}
-       ORDER BY ${orderClause}
-       LIMIT ? OFFSET ?`,
-    )
-      .bind(...bindings, perPage, offset)
-      .all<WebsiteRow>()
-      .then((r) => r.results);
+    const executeWithColumns = async (includeMetadata: boolean) => {
+      const metadataSelect = includeMetadata ? 'w.metadata,' : '';
+      return c.env.DB.prepare(
+        `SELECT
+           w.id, w.name, w.url, w.description, w.logo_url, w.screenshot_url,
+           w.category_id, cat.name AS category_name, cat.slug AS category_slug,
+           w.status, w.featured, w.created_at, w.updated_at,
+           ${metadataSelect}
+           r.avg_rating, COALESCE(r.rating_count, 0) AS rating_count,
+           u.name AS owner_name
+         ${baseQuery}
+         ORDER BY ${orderClause}
+         LIMIT ? OFFSET ?`,
+      )
+        .bind(...bindings, perPage, offset)
+        .all<WebsiteRow>()
+        .then((r) => r.results);
+    };
+
+    let rows: WebsiteRow[];
+    try {
+      rows = await executeWithColumns(true);
+    } catch (err) {
+      if (!isMissingMetadataColumn(err)) throw err;
+      rows = await executeWithColumns(false);
+    }
 
     const meta = buildPaginationMeta(total, page, perPage);
 
@@ -459,25 +495,37 @@ websitesRouter.get('/:id', optionalAuth, async (c) => {
 
     let website: WebsiteRow | undefined;
 
-    if (userId) {
-      website = await c.env.DB.prepare(
-        `${selectBase},
-          ur.score AS user_rating
-          ${joinsBase}
-          LEFT JOIN ratings ur ON ur.website_id = w.id AND ur.user_id = ?
-          ${whereClause}`,
-      )
-        .bind(userId, id)
-        .first<WebsiteRow>();
-    } else {
-      website = await c.env.DB.prepare(
-        `${selectBase},
-          NULL AS user_rating
-          ${joinsBase}
-          ${whereClause}`,
+    const runDetail = async (includeMetadata: boolean) => {
+      const metadataSelect = includeMetadata ? 'w.metadata,' : '';
+      const selectWithMeta = selectBase.replace('w.metadata,', metadataSelect);
+
+      if (userId) {
+        return c.env.DB.prepare(
+          `${selectWithMeta},
+           ur.score AS user_rating
+           ${joinsBase}
+           LEFT JOIN ratings ur ON ur.website_id = w.id AND ur.user_id = ?
+           ${whereClause}`,
+        )
+          .bind(userId, id)
+          .first<WebsiteRow>();
+      }
+
+      return c.env.DB.prepare(
+        `${selectWithMeta},
+         NULL AS user_rating
+         ${joinsBase}
+         ${whereClause}`,
       )
         .bind(id)
         .first<WebsiteRow>();
+    };
+
+    try {
+      website = await runDetail(true);
+    } catch (err) {
+      if (!isMissingMetadataColumn(err)) throw err;
+      website = await runDetail(false);
     }
 
     if (!website) {
