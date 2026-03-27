@@ -259,13 +259,13 @@ npm run db:migrate
 4. Cloudflare Pages (Dashboard) → Projeto:
    - **Build command:** `npm run build --workspace=apps/web`
    - **Output directory:** `apps/web/dist`
-   - **Functions directory:** o Pages deteta automaticamente `apps/web/functions` via `apps/web/wrangler.toml` (não é preciso apontar manualmente na UI atual; apenas confirma que os ficheiros estão no repositório).
+   - **Functions directory:** o Pages deteta automaticamente `functions` na raiz do repositório (não é preciso apontar manualmente na UI atual; basta garantir que a pasta existe).
    - **Wrangler config path (opcional mas recomendado):** `apps/web/wrangler.toml`
 5. Bindings/Variáveis (definir por ambiente em Pages):
    - D1: Binding `DB` associado à base `trono-db` (usa o mesmo ID do `wrangler.toml`)
    - Vars: `ENVIRONMENT=production`, `FRONTEND_ORIGIN=https://<teu-dominio-pages-ou-custom>`, opcional `DEBUG_LOGS=true` para ativar logs de pedidos (default: desligado).
    - Secrets: `JWT_SECRET` (obrigatório); `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` se usares OAuth.
-6. Rotas: a função está em `apps/web/functions/api/[[path]].ts` e expõe `/api/*` (o frontend continua a chamar `/api` por defeito).
+6. Rotas: a função está em `functions/api/[[path]].ts` (raiz do repo) e expõe `/api/*` (o frontend continua a chamar `/api` por defeito).
 7. Local: `cd apps/web && wrangler pages dev --local` (usa o `wrangler.toml` da pasta para ler bindings).
 
 > Tip: não guardes segredos no `wrangler.toml`; usa Secrets no Pages.
