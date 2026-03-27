@@ -2,7 +2,7 @@
 -- Run with: wrangler d1 execute trono-db --file=../../scripts/seed.sql
 
 -- ============================================================
--- USERS (demo)
+-- USERS (demo) - ⚠️ credenciais apenas para desenvolvimento/testes
 -- ============================================================
 INSERT INTO users (id, email, password_hash, name, avatar_url, role, created_at, updated_at) VALUES
   ('user-demo-0001', 'demo@trono.local', '0d1bd0992f2a16792573d96139bca58b:b22d1be91791dec9ed5a3c6f3f8bfc009af05d513cf4fa2a5deff9ecde46585c', 'Utilizador Demo', NULL, 'user', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);

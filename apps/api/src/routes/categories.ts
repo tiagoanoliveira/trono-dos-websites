@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env } from '../index';
 import { createSuccess, createError, generateId, getPaginationParams, buildPaginationMeta } from '../utils/helpers';
 import { requireAuth, type AuthContext } from '../middleware/auth';
+import { MIN_NAME_LENGTH } from '../utils/validation';
 
 type CategoryRow = {
   id: string;
@@ -41,8 +42,11 @@ categoriesRouter.post('/suggestions', requireAuth, async (c) => {
     }
 
     const { name, description } = body;
-    if (typeof name !== 'string' || name.trim().length < 3) {
-      return c.json(createError('VALIDATION_ERROR', 'Nome deve ter pelo menos 3 caracteres'), 400);
+    if (typeof name !== 'string' || name.trim().length < MIN_NAME_LENGTH) {
+      return c.json(
+        createError('VALIDATION_ERROR', `Nome deve ter pelo menos ${MIN_NAME_LENGTH} caracteres`),
+        400,
+      );
     }
 
     const id = generateId();

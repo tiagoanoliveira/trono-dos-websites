@@ -8,6 +8,7 @@ import {
   generateId,
 } from '../utils/helpers';
 import { optionalAuth, requireAuth, type AuthContext } from '../middleware/auth';
+import { MIN_NAME_LENGTH } from '../utils/validation';
 
 type WebsiteRow = {
   id: string;
@@ -89,6 +90,13 @@ const COMMENT_SORT_ORDER: Record<CommentSort, string> = {
 
 export const websitesRouter = new Hono<{ Bindings: Env } & AuthContext>();
 
+function normalizeUrl(input: string): string {
+  const url = new URL(input);
+  const pathname = url.pathname.replace(/\/+$/, '') || '/';
+  const search = url.search;
+  return `${url.protocol}//${url.host.toLowerCase()}${pathname}${search}`;
+}
+
 websitesRouter.post('/', requireAuth, async (c) => {
   try {
     let body: { name?: unknown; url?: unknown; description?: unknown; category_id?: unknown };
@@ -100,8 +108,11 @@ websitesRouter.post('/', requireAuth, async (c) => {
 
     const { name, url, description, category_id } = body;
 
-    if (typeof name !== 'string' || name.trim().length < 3) {
-      return c.json(createError('VALIDATION_ERROR', 'Nome deve ter pelo menos 3 caracteres'), 400);
+    if (typeof name !== 'string' || name.trim().length < MIN_NAME_LENGTH) {
+      return c.json(
+        createError('VALIDATION_ERROR', `Nome deve ter pelo menos ${MIN_NAME_LENGTH} caracteres`),
+        400,
+      );
     }
     if (typeof url !== 'string') {
       return c.json(createError('VALIDATION_ERROR', 'URL é obrigatório'), 400);
@@ -129,8 +140,10 @@ websitesRouter.post('/', requireAuth, async (c) => {
       return c.json(createError('VALIDATION_ERROR', 'Categoria inválida'), 400);
     }
 
+    const normalizedUrl = normalizeUrl(parsedUrl.toString());
+
     const existing = await c.env.DB.prepare('SELECT id FROM websites WHERE url = ?')
-      .bind(parsedUrl.toString())
+      .bind(normalizedUrl)
       .first<{ id: string }>();
     if (existing) {
       return c.json(createError('DUPLICATE', 'Este website já existe na plataforma'), 409);
@@ -143,7 +156,7 @@ websitesRouter.post('/', requireAuth, async (c) => {
       `INSERT INTO websites (id, name, url, description, category_id, status, submitted_by, featured, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, 'pending', ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     )
-      .bind(id, name.trim(), parsedUrl.toString(), description?.toString().trim() ?? null, category_id, userId)
+      .bind(id, name.trim(), normalizedUrl, description?.toString().trim() ?? null, category_id, userId)
       .run();
 
     const created = await c.env.DB.prepare(
