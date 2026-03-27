@@ -89,6 +89,111 @@ const COMMENT_SORT_ORDER: Record<CommentSort, string> = {
 
 export const websitesRouter = new Hono<{ Bindings: Env } & AuthContext>();
 
+websitesRouter.post('/', requireAuth, async (c) => {
+  try {
+    let body: { name?: unknown; url?: unknown; description?: unknown; category_id?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
+    }
+
+    const { name, url, description, category_id } = body;
+
+    if (typeof name !== 'string' || name.trim().length < 3) {
+      return c.json(createError('VALIDATION_ERROR', 'Nome deve ter pelo menos 3 caracteres'), 400);
+    }
+    if (typeof url !== 'string') {
+      return c.json(createError('VALIDATION_ERROR', 'URL é obrigatório'), 400);
+    }
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(url);
+      if (!['https:', 'http:'].includes(parsedUrl.protocol)) {
+        return c.json(createError('VALIDATION_ERROR', 'URL deve começar por http ou https'), 400);
+      }
+    } catch {
+      return c.json(createError('VALIDATION_ERROR', 'URL inválida'), 400);
+    }
+    if (typeof category_id !== 'string') {
+      return c.json(createError('VALIDATION_ERROR', 'Categoria é obrigatória'), 400);
+    }
+
+    const category = await c.env.DB.prepare(
+      'SELECT id FROM categories WHERE id = ? AND status = "active"',
+    )
+      .bind(category_id)
+      .first<{ id: string }>();
+
+    if (!category) {
+      return c.json(createError('VALIDATION_ERROR', 'Categoria inválida'), 400);
+    }
+
+    const existing = await c.env.DB.prepare('SELECT id FROM websites WHERE url = ?')
+      .bind(parsedUrl.toString())
+      .first<{ id: string }>();
+    if (existing) {
+      return c.json(createError('DUPLICATE', 'Este website já existe na plataforma'), 409);
+    }
+
+    const id = generateId();
+    const userId = c.get('userId');
+
+    await c.env.DB.prepare(
+      `INSERT INTO websites (id, name, url, description, category_id, status, submitted_by, featured, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'pending', ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    )
+      .bind(id, name.trim(), parsedUrl.toString(), description?.toString().trim() ?? null, category_id, userId)
+      .run();
+
+    const created = await c.env.DB.prepare(
+      `SELECT w.*, cat.name AS category_name, cat.slug AS category_slug
+       FROM websites w
+       LEFT JOIN categories cat ON cat.id = w.category_id
+       WHERE w.id = ?`,
+    )
+      .bind(id)
+      .first<WebsiteRow>();
+
+    return c.json(createSuccess(created), 201);
+  } catch (err) {
+    console.error('[websites POST /]', err);
+    return c.json(createError('INTERNAL_ERROR', 'Não foi possível criar o website'), 500);
+  }
+});
+
+websitesRouter.get('/mine', requireAuth, async (c) => {
+  try {
+    const url = new URL(c.req.url);
+    const { page, perPage, offset } = getPaginationParams(url);
+    const userId = c.get('userId');
+
+    const countRow = await c.env.DB.prepare(
+      'SELECT COUNT(*) AS total FROM websites WHERE submitted_by = ?',
+    )
+      .bind(userId)
+      .first<CountRow>();
+
+    const rows = await c.env.DB.prepare(
+      `SELECT w.*, cat.name AS category_name, cat.slug AS category_slug
+       FROM websites w
+       LEFT JOIN categories cat ON cat.id = w.category_id
+       WHERE w.submitted_by = ?
+       ORDER BY w.created_at DESC
+       LIMIT ? OFFSET ?`,
+    )
+      .bind(userId, perPage, offset)
+      .all<WebsiteRow>()
+      .then((r) => r.results);
+
+    const meta = buildPaginationMeta(countRow?.total ?? 0, page, perPage);
+    return c.json(createSuccess(rows, meta));
+  } catch (err) {
+    console.error('[websites GET /mine]', err);
+    return c.json(createError('INTERNAL_ERROR', 'Não foi possível carregar contribuições'), 500);
+  }
+});
+
 websitesRouter.get('/', async (c) => {
   try {
     const url = new URL(c.req.url);
