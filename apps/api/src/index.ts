@@ -4,6 +4,7 @@ import { categoriesRouter } from './routes/categories';
 import { websitesRouter } from './routes/websites';
 import { ideasRouter } from './routes/ideas';
 import { authRouter } from './routes/auth';
+import { createError } from './utils/helpers';
 
 export type Env = {
   DB: D1Database;
@@ -11,7 +12,7 @@ export type Env = {
   ENVIRONMENT: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
-  DEBUG_LOGS?: string;
+  DEBUG_LOGS?: string; // set to "true" to log requests
 };
 
 const app = new Hono<{ Bindings: Env }>();
@@ -19,8 +20,7 @@ const app = new Hono<{ Bindings: Env }>();
 app.use('*', corsMiddleware);
 app.use('*', async (c, next) => {
   // Read per-request so toggling DEBUG_LOGS takes effect without waiting for isolates to recycle.
-  const debugEnabled = c.env.DEBUG_LOGS === 'true';
-  if (debugEnabled) {
+  if (c.env.DEBUG_LOGS === 'true') {
     console.log('[request]', c.req.method, c.req.path, { origin: c.req.header('Origin') ?? 'n/a' });
   }
   await next();
@@ -29,7 +29,7 @@ app.use('*', async (c, next) => {
 app.use('*', async (c, next) => {
   if (!c.env.DB) {
     console.error('[config] Missing D1 binding DB');
-    return c.json({ success: false, error: { code: 'CONFIG_ERROR', message: 'DB binding not configured' } }, 500);
+    return c.json(createError('CONFIG_ERROR', 'DB binding not configured'), 500);
   }
   await next();
 });

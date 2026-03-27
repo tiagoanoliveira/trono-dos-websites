@@ -10,10 +10,11 @@ export const corsMiddleware: MiddlewareHandler = async (c, next) => {
   const requestOrigin = c.req.header('Origin');
 
   const allowedOrigin = requestOrigin ?? '*';
-  const allowCredentials = allowedOrigin !== '*';
+  const allowCredentials = Boolean(requestOrigin);
 
   c.header('Access-Control-Allow-Origin', allowedOrigin);
   c.header('Vary', 'Origin');
+  // Only allow credentials when an Origin is present; wildcard responses stay non-credentialed.
   if (allowCredentials) {
     c.header('Access-Control-Allow-Credentials', 'true');
   }
