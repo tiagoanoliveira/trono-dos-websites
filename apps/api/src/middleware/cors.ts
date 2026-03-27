@@ -4,29 +4,20 @@ import { createError } from '../utils/helpers';
 const ALLOWED_METHODS = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
 const ALLOWED_HEADERS = 'Content-Type, Authorization';
 
-// Allows credentialed requests (cookies). In production, FRONTEND_ORIGIN must
-// be set to your Pages domain (e.g. https://trono-dos-websites.pages.dev).
+// Allows credentialed requests (cookies). Echoes the request's Origin (or "*"
+// if none is sent).
 export const corsMiddleware: MiddlewareHandler = async (c, next) => {
-  const isProduction = c.env.ENVIRONMENT === 'production';
   const requestOrigin = c.req.header('Origin');
-  const configuredOrigin = c.env.FRONTEND_ORIGIN;
 
-  if (isProduction && !configuredOrigin) {
-    return c.json(
-      createError('CONFIG_ERROR', 'Set FRONTEND_ORIGIN in production (Cloudflare Worker environment variable)'),
-      500,
-    );
-  }
-
-  if (isProduction && configuredOrigin && requestOrigin && requestOrigin !== configuredOrigin) {
-    return c.json(createError('FORBIDDEN', 'Origin not allowed'), 403);
-  }
-
-  const allowedOrigin = configuredOrigin ?? requestOrigin ?? '*';
+  const allowedOrigin = requestOrigin ?? '*';
+  const allowCredentials = Boolean(requestOrigin);
 
   c.header('Access-Control-Allow-Origin', allowedOrigin);
   c.header('Vary', 'Origin');
-  c.header('Access-Control-Allow-Credentials', 'true');
+  // Only allow credentials when an Origin is present; wildcard responses stay non-credentialed.
+  if (allowCredentials) {
+    c.header('Access-Control-Allow-Credentials', 'true');
+  }
   c.header('Access-Control-Allow-Methods', ALLOWED_METHODS);
   c.header('Access-Control-Allow-Headers', `${ALLOWED_HEADERS}, Cookie`);
 
