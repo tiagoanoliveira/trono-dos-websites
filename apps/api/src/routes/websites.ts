@@ -117,6 +117,14 @@ websitesRouter.post('/', requireAuth, async (c) => {
       return c.json(createError('VALIDATION_ERROR', 'Categoria é obrigatória'), 400);
     }
 
+    let normalizedDescription: string | null = null;
+    if (description !== undefined && description !== null) {
+      if (typeof description !== 'string') {
+        return c.json(createError('VALIDATION_ERROR', 'Descrição inválida'), 400);
+      }
+      normalizedDescription = description.trim();
+    }
+
     const category = await c.env.DB.prepare(
       'SELECT id FROM categories WHERE id = ? AND status = "active"',
     )
@@ -143,7 +151,7 @@ websitesRouter.post('/', requireAuth, async (c) => {
       `INSERT INTO websites (id, name, url, description, category_id, status, submitted_by, featured, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, 'pending', ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     )
-      .bind(id, name.trim(), normalizedUrl, description?.toString().trim() ?? null, category_id, userId)
+      .bind(id, name.trim(), normalizedUrl, normalizedDescription, category_id, userId)
       .run();
 
     const created = await c.env.DB.prepare(

@@ -15,7 +15,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "rootDirs": ["src"],
+    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
       "@trono/shared/*": ["../../packages/shared/src/*"]

@@ -276,7 +276,8 @@ export function ProporWebsitePage() {
                   <div>
                     <p className="font-medium text-throne-900 leading-tight">{w.name}</p>
                     <p className="text-xs text-throne-500">
-                      {w.category_name ?? 'Sem categoria'} · {new Date(w.created_at).toLocaleDateString()}
+                      {w.category_name ?? 'Sem categoria'} ·{' '}
+                      {new Date(w.created_at).toLocaleDateString('pt-PT')}
                     </p>
                   </div>
                   <StatusBadge status={w.status} />
