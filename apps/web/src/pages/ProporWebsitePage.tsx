@@ -29,6 +29,16 @@ const STATUS_VARIANTS: Record<string, { label: string; variant: 'warning' | 'suc
   rejected: { label: 'Rejeitado', variant: 'danger' },
 };
 
+const formatDatePt = (value: string) => {
+  try {
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return 'Data inválida';
+    return dt.toLocaleDateString('pt-PT');
+  } catch {
+    return 'Data inválida';
+  }
+};
+
 export function ProporWebsitePage() {
   const { isAuthenticated, user } = useAuthStore();
   const queryClient = useQueryClient();
@@ -282,8 +292,7 @@ export function ProporWebsitePage() {
                   <div>
                     <p className="font-medium text-throne-900 leading-tight">{w.name}</p>
                     <p className="text-xs text-throne-500">
-                      {w.category_name ?? 'Sem categoria'} ·{' '}
-                      {new Date(w.created_at).toLocaleDateString('pt-PT')}
+                      {w.category_name ?? 'Sem categoria'} · {formatDatePt(w.created_at)}
                     </p>
                   </div>
                   <StatusBadge status={w.status} />
