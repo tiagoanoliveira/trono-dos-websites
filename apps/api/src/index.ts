@@ -11,7 +11,6 @@ export type Env = {
   ENVIRONMENT: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
-  FRONTEND_ORIGIN?: string;
   DEBUG_LOGS?: string;
 };
 
@@ -23,6 +22,14 @@ app.use('*', async (c, next) => {
   const debugEnabled = c.env.DEBUG_LOGS === 'true';
   if (debugEnabled) {
     console.log('[request]', c.req.method, c.req.path, { origin: c.req.header('Origin') ?? 'n/a' });
+  }
+  await next();
+});
+
+app.use('*', async (c, next) => {
+  if (!c.env.DB) {
+    console.error('[config] Missing D1 binding DB');
+    return c.json({ success: false, error: { code: 'CONFIG_ERROR', message: 'DB binding not configured' } }, 500);
   }
   await next();
 });
