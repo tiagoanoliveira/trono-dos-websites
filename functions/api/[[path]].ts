@@ -1,4 +1,4 @@
-import app from '@trono/api';
+import app from '../../apps/api/src';
 import { handle } from 'hono/cloudflare-pages';
 
 export const onRequest = handle(app);
