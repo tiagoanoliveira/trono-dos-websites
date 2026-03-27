@@ -276,3 +276,8 @@ npm run db:migrate
 6. Rota / binding para API: em Pages > Functions/Routes, criar rota `/api/*` apontando para o worker `trono-api` (nome definido em `apps/api/wrangler.toml`). Assim o frontend continua a chamar `/api` como já configurado no Vite.
 
 > Tip: in production, don't keep `JWT_SECRET` in `wrangler.toml`; use `wrangler secret` only.
+
+## 🌱 Seed de dados rápido
+- Executa `npm run db:migrate` e depois `npm run db:seed` para popular categorias e exemplos.
+- Utilizador demo: `demo@trono.local` com password `Password123` (já criada no seed) para testar submissões/estado.
+- ⚠️ Estes dados e credenciais são apenas para desenvolvimento/teste. **Não** correr o seed em produção nem reutilizar a conta demo em ambientes reais.

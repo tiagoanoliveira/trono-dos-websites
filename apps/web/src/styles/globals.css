@@ -35,7 +35,7 @@
   }
 
   .card-hover {
-    @apply card transition-all duration-200 hover:shadow-md hover:border-throne-300;
+    @apply card transition-all duration-200 hover:shadow-lg hover:border-crown-200/70 hover:shadow-crown-100/60;
   }
 
   .btn {
@@ -43,19 +43,19 @@
   }
 
   .btn-primary {
-    @apply btn bg-crown-500 text-white hover:bg-crown-600 focus:ring-crown-500;
+    @apply btn bg-crown-500 text-white hover:bg-crown-600 focus:ring-crown-400 shadow-sm hover:shadow transition-transform hover:-translate-y-px;
   }
 
   .btn-secondary {
-    @apply btn bg-throne-100 text-throne-700 hover:bg-throne-200 focus:ring-throne-500;
+    @apply btn bg-throne-100 text-throne-800 hover:bg-throne-200 focus:ring-crown-300;
   }
 
   .btn-ghost {
-    @apply btn bg-transparent text-throne-600 hover:bg-throne-100 focus:ring-throne-500;
+    @apply btn bg-transparent text-throne-700 hover:bg-throne-100 focus:ring-throne-300;
   }
 
   .input {
-    @apply w-full rounded-lg border border-throne-300 bg-white px-4 py-2 text-throne-900 placeholder:text-throne-400 focus:border-crown-500 focus:outline-none focus:ring-2 focus:ring-crown-500/20 transition-colors;
+    @apply w-full rounded-lg border border-throne-200 bg-white px-4 py-2 text-throne-900 placeholder:text-throne-400 focus:border-crown-400 focus:outline-none focus:ring-2 focus:ring-crown-200 transition-colors;
   }
 
   .label {

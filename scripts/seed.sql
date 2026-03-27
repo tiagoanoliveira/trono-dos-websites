@@ -1,5 +1,16 @@
 -- Seed data for Trono dos Websites
+-- ⚠️ DEMO/APENAS DESENVOLVIMENTO. NÃO UTILIZAR EM PRODUÇÃO.
 -- Run with: wrangler d1 execute trono-db --file=../../scripts/seed.sql
+
+-- Proteção: aborta se já existirem utilizadores (evita correr em bases com dados reais)
+SELECT CASE WHEN EXISTS (SELECT 1 FROM users) THEN RAISE(ABORT, 'Seed bloqueado: tabela users já tem dados') END;
+
+-- ============================================================
+-- USERS (demo) - ⚠️ credenciais apenas para desenvolvimento/testes
+-- Password em texto: Password123 (para que não haja dúvidas sobre o hash)
+-- ============================================================
+INSERT INTO users (id, email, password_hash, name, avatar_url, role, created_at, updated_at) VALUES
+  ('user-demo-0001', 'demo@trono.local', '0d1bd0992f2a16792573d96139bca58b:b22d1be91791dec9ed5a3c6f3f8bfc009af05d513cf4fa2a5deff9ecde46585c', 'Utilizador Demo', NULL, 'user', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- ============================================================
 -- MAIN CATEGORIES
@@ -183,3 +194,15 @@ INSERT INTO websites (id, name, url, description, category_id, status, featured)
   ('web-olx-pt-000001', 'OLX Portugal', 'https://www.olx.pt', 'Marketplace de classificados para compra e venda de produtos usados', 'sub-marketplace-0001', 'approved', TRUE),
   ('web-amazon-pt-0001', 'Amazon Portugal', 'https://www.amazon.es', 'Maior marketplace online do mundo com entregas em Portugal', 'sub-marketplace-0001', 'approved', FALSE),
   ('web-kuantokusta-0001', 'KuantoKusta', 'https://www.kuantokusta.pt', 'Comparador de preços de produtos tecnológicos e eletrodomésticos', 'sub-comp-preco-0001', 'approved', TRUE);
+
+-- Contribuições de exemplo ligadas ao utilizador demo
+INSERT INTO websites (id, name, url, description, category_id, status, submitted_by, featured) VALUES
+  ('web-demo-pendente-01', 'Portal Municipal Cascais', 'https://www.cascais.pt', 'Serviços municipais e pagamentos online para residentes', 'sub-governo-000001', 'pending', 'user-demo-0001', FALSE),
+  ('web-demo-aprovado-01', 'MyEnergy Diário', 'https://www.myenergy.pt', 'Dashboard pessoal para acompanhar consumos de energia', 'sub-energia-000001', 'approved', 'user-demo-0001', FALSE),
+  ('web-demo-rejeitado-01', 'Coupons Express', 'https://www.couponsexpress.pt', 'Listagem de cupões suspeitos — rejeitado para segurança', 'sub-promocoes-000001', 'rejected', 'user-demo-0001', FALSE);
+
+-- Sugestões de categoria para testar notificações
+INSERT INTO category_suggestions (id, name, description, suggested_by, status, created_at) VALUES
+  ('catsug-demo-001', 'Cidadania Digital', 'Portais para identidades digitais, assinaturas e certificados', 'user-demo-0001', 'pending', CURRENT_TIMESTAMP),
+  ('catsug-demo-002', 'Mobilidade Verde', 'Bicicletas partilhadas, trotinetes e carregadores elétricos', 'user-demo-0001', 'approved', CURRENT_TIMESTAMP),
+  ('catsug-demo-003', 'Segurança Online', 'Proteção de dados, passwords e monitorização de leaks', 'user-demo-0001', 'rejected', CURRENT_TIMESTAMP);
