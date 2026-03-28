@@ -777,7 +777,8 @@ websitesRouter.post('/:id/ratings', requireAuth, async (c) => {
       return c.json(createError('VALIDATION_ERROR', 'Avaliação inválida'), 400);
     }
 
-    // Legacy mapping: 4-5 stars => upvote, 1-2 stars => downvote, 3 stars => neutral/remove vote.
+    // Legacy mapping: 4-5 stars => upvote, 1-2 stars => downvote, 3 stars => neutral/remove vote,
+    // preserving the idea that a middle rating should not shift the balance.
     let value: -1 | 0 | 1 = 0;
     if (score >= 4) value = 1;
     else if (score <= 2) value = -1;
