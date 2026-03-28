@@ -101,6 +101,7 @@ function normalizeWebsiteMetadata(input: unknown): string | null {
   if (
     typeof launchPrecision === 'string' &&
     allowedPrecisions.includes(launchPrecision as WebsiteMetadata['launch_precision']) &&
+    // Store explicit "unknown" to reflect user choice even when a date isn't provided
     (metadata.launch_date || launchPrecision === 'unknown')
   ) {
     metadata.launch_precision = launchPrecision as WebsiteMetadata['launch_precision'];
