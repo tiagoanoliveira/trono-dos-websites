@@ -130,8 +130,8 @@ export function ProfilePage() {
                       setIsUploadingAvatar(true);
                       try {
                         const uploadedUrl = await uploadImage(file, 'avatar');
-                        setAvatar(uploadedUrl);
                         await updateProfile({ avatar_url: uploadedUrl });
+                        setAvatar(uploadedUrl);
                         setMessage('Avatar enviado e guardado com sucesso!');
                       } catch (err) {
                         setError(err instanceof Error ? err.message : 'Falha ao enviar/guardar o avatar.');
