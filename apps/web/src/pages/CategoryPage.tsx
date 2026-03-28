@@ -183,7 +183,8 @@ export function CategoryPage() {
             )}
             {category.websiteCount !== undefined && (
               <p className="mt-2 text-sm text-throne-400">
-                {category.websiteCount} {category.websiteCount === 1 ? 'website' : 'websites'} (inclui subcategorias)
+                {category.websiteCount} {category.websiteCount === 1 ? 'website' : 'websites'}
+                {category.children && category.children.length > 0 ? ' (inclui subcategorias)' : ''}
               </p>
             )}
           </div>
@@ -358,13 +359,17 @@ function WebsiteListRow({
           type="button"
           onClick={() => onVote('down')}
           disabled={disabled || voting}
-          className={cn(
-            'transition-colors',
-            disabled ? 'text-throne-300 cursor-not-allowed' : userVote === -1 ? 'text-crown-600' : 'hover:text-crown-600',
-          )}
-          title={disabled ? 'Entra para votar' : 'Downvote'}
-        >
-          ▼
+            className={cn(
+              'transition-colors',
+              disabled
+                ? 'text-throne-300 cursor-not-allowed'
+                : userVote === -1
+                  ? 'text-red-600'
+                  : 'hover:text-crown-600',
+            )}
+            title={disabled ? 'Entra para votar' : 'Downvote'}
+          >
+            ▼
         </button>
       </div>
 

@@ -773,7 +773,7 @@ websitesRouter.post('/:id/ratings', requireAuth, async (c) => {
     }
 
     const { score } = body;
-    if (typeof score !== 'number') {
+    if (typeof score !== 'number' || !Number.isInteger(score) || score < 1 || score > 5) {
       return c.json(createError('VALIDATION_ERROR', 'Avaliação inválida'), 400);
     }
 

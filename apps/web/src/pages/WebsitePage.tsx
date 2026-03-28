@@ -184,7 +184,7 @@ export function WebsitePage() {
                       voteMutation.isPending && 'opacity-60 cursor-not-allowed',
                     )}
                     onClick={() => (isAuthenticated ? voteMutation.mutate(userVote === 1 ? 0 : 1) : navigate('/entrar'))}
-                    disabled={voteMutation.isPending || !isAuthenticated}
+                    disabled={voteMutation.isPending}
                   >
                     ▲ Up
                   </button>
@@ -197,7 +197,7 @@ export function WebsitePage() {
                     onClick={() =>
                       isAuthenticated ? voteMutation.mutate(userVote === -1 ? 0 : -1) : navigate('/entrar')
                     }
-                    disabled={voteMutation.isPending || !isAuthenticated}
+                    disabled={voteMutation.isPending}
                   >
                     ▼ Down
                   </button>
