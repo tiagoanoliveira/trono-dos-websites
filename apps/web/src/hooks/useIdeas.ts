@@ -6,9 +6,23 @@ export function useIdeas() {
   const query = useQuery({
     queryKey: ['ideas'],
     queryFn: async () => {
-      const res = await api.get<PaginatedResponse<Idea>>('/ideas');
+      const res = await api.get<PaginatedResponse<Idea> | Idea[]>('/ideas');
       if (!res.success || !res.data) throw new Error(res.error?.message || 'Erro ao carregar ideias');
-      return res.data;
+      const raw = res.data;
+      if (Array.isArray(raw)) {
+        return {
+          data: raw,
+          meta: {
+            total: raw.length,
+            page: 1,
+            perPage: raw.length || 20,
+            totalPages: 1,
+            hasNextPage: false,
+            hasPrevPage: false,
+          },
+        } as PaginatedResponse<Idea>;
+      }
+      return raw;
     },
   });
 

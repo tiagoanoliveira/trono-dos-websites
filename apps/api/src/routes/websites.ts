@@ -3,6 +3,8 @@ import type { Env } from '../index';
 import { createSuccess, createError, getPaginationParams, buildPaginationMeta, generateId } from '../utils/helpers';
 import { optionalAuth, requireAuth, type AuthContext } from '../middleware/auth';
 import { MIN_NAME_LENGTH, normalizeUrl } from '../utils/validation';
+import { isAllowedUploadUrl } from '../utils/uploadUrl';
+import { notifyStatusChange } from '../services/notifications';
 
 type WebsiteRow = {
   id: string;
@@ -15,12 +17,16 @@ type WebsiteRow = {
   category_name: string | null;
   category_slug: string | null;
   status: string;
+  submitted_by: string | null;
   featured: number;
   created_at: string;
   updated_at: string;
-  avg_rating: number | null;
-  rating_count: number;
-  user_rating?: number | null;
+  metadata?: string | null;
+  owner_name?: string | null;
+  upvotes?: number | null;
+  downvotes?: number | null;
+  score?: number | null;
+  user_vote?: number | null;
   comment_count?: number;
 };
 
@@ -29,20 +35,168 @@ type CountRow = { total: number };
 type SortOption = 'rating' | 'recent' | 'featured' | 'date' | 'popularity';
 
 const SORT_MAP: Record<SortOption, string> = {
-  rating: 'avg_rating DESC NULLS LAST, w.created_at DESC',
+  rating: 'score DESC NULLS LAST, w.created_at DESC',
   recent: 'w.created_at DESC',
   date: 'w.created_at DESC',
-  popularity: 'COALESCE(r.rating_count, 0) DESC, avg_rating DESC NULLS LAST, w.created_at DESC',
-  featured: 'w.featured DESC, avg_rating DESC NULLS LAST, w.created_at DESC',
+  popularity: 'COALESCE(wv.score, 0) DESC, COALESCE(wv.upvotes,0) DESC, w.created_at DESC',
+  featured: 'w.featured DESC, COALESCE(wv.score,0) DESC, w.created_at DESC',
 };
+
+function visibleStatusCondition(alias?: string) {
+  const prefix = alias ? `${alias}.` : '';
+  return `(${prefix}status IN ('approved', 'active') OR ${prefix}status IS NULL)`;
+}
+
+const VISIBLE_STATUS_CONDITION = visibleStatusCondition('w');
+const VISIBLE_STATUS_CONDITION_NO_ALIAS = visibleStatusCondition();
 
 const MIN_RATING = 1;
 const MAX_RATING = 5;
 const MIN_COMMENT_LENGTH = 3;
 const MAX_COMMENT_LENGTH = 1000;
+const ALLOWED_LANGUAGES = [
+  'JavaScript',
+  'TypeScript',
+  'Python',
+  'Java',
+  'C#',
+  'C++',
+  'Go',
+  'Rust',
+  'PHP',
+  'Ruby',
+  'Swift',
+  'Kotlin',
+  'Dart',
+  'Elixir',
+  'Scala',
+  'SQL',
+  'HTML',
+  'CSS',
+];
+const ALLOWED_LANG_SET = new Set(ALLOWED_LANGUAGES.map((lang) => lang.toLowerCase()));
+type WebsiteMetadata = {
+  author?: string | null;
+  launch_date?: string | null;
+  launch_precision?: 'exact' | 'month' | 'year' | 'unknown';
+  languages?: string[];
+  images?: string[];
+  is_open_source?: boolean;
+  source_url?: string | null;
+};
 
 function isValidSort(value: string | null): value is SortOption {
   return typeof value === 'string' && value in SORT_MAP;
+}
+
+function parseMetadata(value?: string | null): WebsiteMetadata | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed && typeof parsed === 'object') {
+      return parsed as WebsiteMetadata;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Normalizes optional metadata sent by the client so it can be safely stored
+ * as a JSON string in the `websites.metadata` column. Only supported keys are
+ * kept and empty values are discarded.
+ */
+function normalizeWebsiteMetadata(input: unknown): string | null {
+  if (!input || typeof input !== 'object') return null;
+
+  const data = input as Record<string, unknown>;
+  const metadata: WebsiteMetadata = {};
+
+  if (typeof data.author === 'string') {
+    metadata.author = data.author.trim() || null;
+  }
+
+  if (typeof data.launchDate === 'string') {
+    metadata.launch_date = data.launchDate.trim() || null;
+  }
+
+  const launchPrecision = data.launchPrecision;
+  const allowedPrecisions: WebsiteMetadata['launch_precision'][] = ['exact', 'month', 'year', 'unknown'];
+  if (typeof launchPrecision === 'string' && allowedPrecisions.includes(launchPrecision as WebsiteMetadata['launch_precision'])) {
+    // Allow explicit "unknown" so the UI can reflect that the user intentionally could not provide a date.
+    // For all other precisions we only store them when a launch_date is present.
+    if (launchPrecision === 'unknown' || metadata.launch_date) {
+      metadata.launch_precision = launchPrecision as WebsiteMetadata['launch_precision'];
+    }
+  }
+
+  if (Array.isArray(data.languages)) {
+    const langs = data.languages
+      .filter((lang) => typeof lang === 'string')
+      .map((lang) => lang.trim())
+      .filter(Boolean)
+      .map((lang) => {
+        const lowered = lang.toLowerCase();
+        return ALLOWED_LANG_SET.has(lowered)
+          ? ALLOWED_LANGUAGES.find((allowed) => allowed.toLowerCase() === lowered) ?? null
+          : null;
+      })
+      .filter((lang): lang is string => Boolean(lang));
+    if (langs.length > 0) metadata.languages = langs;
+  }
+
+  if (Array.isArray(data.images)) {
+    const imgs = data.images
+      .filter((url) => typeof url === 'string')
+      .map((url) => url.trim())
+      .filter(Boolean);
+    if (imgs.length > 0) metadata.images = imgs;
+  }
+
+  if (typeof data.isOpenSource === 'boolean') {
+    metadata.is_open_source = data.isOpenSource;
+  }
+
+  if (typeof data.sourceUrl === 'string') {
+    metadata.source_url = data.sourceUrl.trim() || null;
+  }
+
+  const hasContent = Object.values(metadata).some((value) => {
+    if (Array.isArray(value)) return value.length > 0;
+    return value !== undefined && value !== null && value !== '';
+  });
+
+  return hasContent ? JSON.stringify(metadata) : null;
+}
+
+type CategoryLink = { id: string; parent_id: string | null };
+
+async function collectCategoryIdsWithDescendants(db: Env['DB'], categoryId: string): Promise<string[]> {
+  const rows = await db
+    .prepare('SELECT id, parent_id FROM categories WHERE status = "active"')
+    .all<CategoryLink>()
+    .then((r) => r.results);
+
+  const childrenMap = new Map<string, string[]>();
+  rows.forEach((row) => {
+    if (row.parent_id) {
+      if (!childrenMap.has(row.parent_id)) childrenMap.set(row.parent_id, []);
+      childrenMap.get(row.parent_id)?.push(row.id);
+    }
+  });
+
+  const ids = new Set<string>();
+  const stack = [categoryId];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || ids.has(current)) continue;
+    ids.add(current);
+    const children = childrenMap.get(current) ?? [];
+    children.forEach((child) => stack.push(child));
+  }
+
+  return Array.from(ids);
 }
 
 type CommentRow = {
@@ -54,8 +208,13 @@ type CommentRow = {
   status: string;
   created_at: string;
   updated_at: string;
+  kind?: string | null;
   user_name: string;
   user_avatar: string | null;
+  upvotes?: number | null;
+  downvotes?: number | null;
+  score?: number | null;
+  user_vote?: number | null;
 };
 
 type CommentNode = {
@@ -67,11 +226,16 @@ type CommentNode = {
   status: string;
   created_at: string;
   updated_at: string;
+  kind?: string | null;
   user: {
     id: string;
     name: string;
     avatar_url: string | null;
   };
+  upvotes: number;
+  downvotes: number;
+  score: number;
+  user_vote?: number | null;
   replies: CommentNode[];
 };
 
@@ -82,18 +246,32 @@ const COMMENT_SORT_ORDER: Record<CommentSort, string> = {
   oldest: 'c.created_at ASC',
 };
 
+const COMMENT_KINDS = new Set(['opinion', 'suggestion', 'issue', 'praise', 'other', 'general']);
+
+function isMissingMetadataColumn(err: unknown) {
+  return err instanceof Error && err.message.includes('no such column: w.metadata');
+}
+
 export const websitesRouter = new Hono<{ Bindings: Env } & AuthContext>();
 
 websitesRouter.post('/', requireAuth, async (c) => {
   try {
-    let body: { name?: unknown; url?: unknown; description?: unknown; category_id?: unknown };
+    let body: {
+      name?: unknown;
+      url?: unknown;
+      description?: unknown;
+      category_id?: unknown;
+      logo_url?: unknown;
+      screenshot_url?: unknown;
+      metadata?: unknown;
+    };
     try {
       body = await c.req.json();
     } catch {
       return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
     }
 
-    const { name, url, description, category_id } = body;
+    const { name, url, description, category_id, logo_url, screenshot_url, metadata } = body;
 
     if (typeof name !== 'string' || name.trim().length < MIN_NAME_LENGTH) {
       return c.json(
@@ -125,6 +303,77 @@ websitesRouter.post('/', requireAuth, async (c) => {
       normalizedDescription = description.trim();
     }
 
+    const normalizeOptionalImageUrl = (value: unknown, field: string) => {
+      if (value === undefined || value === null || value === '') return null;
+      if (typeof value !== 'string') {
+        throw new Error(`${field} inválido`);
+      }
+      const trimmed = value.trim();
+      if (trimmed.startsWith('/api/uploads/images/')) {
+        if (!isAllowedUploadUrl(trimmed, c.env)) throw new Error(`${field} inválido`);
+        return trimmed;
+      }
+      try {
+        const parsed = new URL(trimmed);
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+          throw new Error(`${field} inválido`);
+        }
+        const normalized = parsed.toString();
+        if (!isAllowedUploadUrl(normalized, c.env)) {
+          throw new Error(`${field} inválido`);
+        }
+        return normalized;
+      } catch {
+        throw new Error(`${field} inválido`);
+      }
+    };
+
+    let normalizedLogoUrl: string | null;
+    let normalizedScreenshotUrl: string | null;
+    try {
+      normalizedLogoUrl = normalizeOptionalImageUrl(logo_url, 'logo_url');
+      normalizedScreenshotUrl = normalizeOptionalImageUrl(screenshot_url, 'screenshot_url');
+    } catch (err) {
+      return c.json(
+        createError('VALIDATION_ERROR', err instanceof Error ? err.message : 'URL de imagem inválida'),
+        400,
+      );
+    }
+
+    if (metadata && typeof metadata === 'object' && 'languages' in (metadata as Record<string, unknown>)) {
+      const langs = (metadata as { languages?: unknown }).languages;
+      if (langs !== undefined) {
+        if (!Array.isArray(langs) || !langs.every((l) => typeof l === 'string')) {
+          return c.json(createError('VALIDATION_ERROR', 'Linguagens devem ser uma lista de strings'), 400);
+        }
+        const invalid = (langs as string[]).filter((lang) => !ALLOWED_LANG_SET.has(lang.toLowerCase()));
+        if (invalid.length > 0) {
+          return c.json(
+            createError(
+              'VALIDATION_ERROR',
+              `Linguagens inválidas: ${invalid.join(', ')}. Utilize apenas valores da lista permitida.`,
+            ),
+            400,
+          );
+        }
+      }
+    }
+
+    if (metadata && typeof metadata === 'object' && 'images' in (metadata as Record<string, unknown>)) {
+      const images = (metadata as { images?: unknown }).images;
+      if (images !== undefined) {
+        if (!Array.isArray(images) || !images.every((img) => typeof img === 'string')) {
+          return c.json(createError('VALIDATION_ERROR', 'Imagens devem ser uma lista de strings'), 400);
+        }
+        const invalid = (images as string[]).filter((img) => !isAllowedUploadUrl(img, c.env));
+        if (invalid.length > 0) {
+          return c.json(createError('VALIDATION_ERROR', 'Imagens devem ser enviadas por upload R2'), 400);
+        }
+      }
+    }
+
+    const normalizedMetadata = normalizeWebsiteMetadata(metadata);
+
     const category = await c.env.DB.prepare(
       'SELECT id FROM categories WHERE id = ? AND status = "active"',
     )
@@ -147,23 +396,74 @@ websitesRouter.post('/', requireAuth, async (c) => {
     const id = generateId();
     const userId = c.get('userId');
 
-    await c.env.DB.prepare(
-      `INSERT INTO websites (id, name, url, description, category_id, status, submitted_by, featured, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'pending', ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-    )
-      .bind(id, name.trim(), normalizedUrl, normalizedDescription, category_id, userId)
-      .run();
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO websites (id, name, url, description, logo_url, screenshot_url, category_id, status, submitted_by, featured, metadata, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, 0, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      )
+        .bind(
+          id,
+          name.trim(),
+          normalizedUrl,
+          normalizedDescription,
+          normalizedLogoUrl,
+          normalizedScreenshotUrl,
+          category_id,
+          userId,
+          normalizedMetadata,
+        )
+        .run();
+    } catch (err) {
+      if (!isMissingMetadataColumn(err)) throw err;
+      await c.env.DB.prepare(
+        `INSERT INTO websites (id, name, url, description, logo_url, screenshot_url, category_id, status, submitted_by, featured, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      )
+        .bind(
+          id,
+          name.trim(),
+          normalizedUrl,
+          normalizedDescription,
+          normalizedLogoUrl,
+          normalizedScreenshotUrl,
+          category_id,
+          userId,
+        )
+        .run();
+    }
 
-    const created = await c.env.DB.prepare(
-      `SELECT w.*, cat.name AS category_name, cat.slug AS category_slug
-       FROM websites w
-       LEFT JOIN categories cat ON cat.id = w.category_id
-       WHERE w.id = ?`,
-    )
-      .bind(id)
-      .first<WebsiteRow>();
+    const fetchCreated = async (includeMetadata: boolean) => {
+      const metadataSelect = includeMetadata ? 'w.metadata,' : '';
+      return c.env.DB.prepare(
+        `SELECT w.*, ${metadataSelect} cat.name AS category_name, cat.slug AS category_slug, u.name AS owner_name
+         FROM websites w
+         LEFT JOIN categories cat ON cat.id = w.category_id
+         LEFT JOIN users u ON u.id = w.submitted_by
+         WHERE w.id = ?`,
+      )
+        .bind(id)
+        .first<WebsiteRow>();
+    };
 
-    return c.json(createSuccess(created), 201);
+    let created: WebsiteRow | undefined;
+    try {
+      created = await fetchCreated(true);
+    } catch (err) {
+      if (!isMissingMetadataColumn(err)) throw err;
+      created = await fetchCreated(false);
+    }
+
+    return c.json(
+      createSuccess(
+        created
+          ? {
+              ...created,
+              metadata: parseMetadata(created.metadata),
+            }
+          : created,
+      ),
+      201,
+    );
   } catch (err) {
     console.error('[websites POST /]', err);
     return c.json(createError('INTERNAL_ERROR', 'Não foi possível criar o website'), 500);
@@ -202,23 +502,49 @@ websitesRouter.get('/mine', requireAuth, async (c) => {
   }
 });
 
-websitesRouter.get('/', async (c) => {
+websitesRouter.get('/', optionalAuth, async (c) => {
   try {
     const url = new URL(c.req.url);
     const { page, perPage, offset } = getPaginationParams(url);
+    const userId = c.get('userId');
 
     const categoryId = url.searchParams.get('category_id');
+    const includeDescendants = url.searchParams.get('include_descendants') === 'true';
     const search = url.searchParams.get('search');
     const sortParam = url.searchParams.get('sort');
     const sort: SortOption = isValidSort(sortParam) ? sortParam : 'recent';
     const orderClause = SORT_MAP[sort];
 
-    const conditions: string[] = ["w.status = 'approved'"];
+    if (c.env.DEBUG_LOGS === 'true') {
+      console.log('[websites] list request', {
+        categoryId,
+        includeDescendants,
+        search,
+        sort,
+        page,
+        perPage,
+      });
+    }
+
+    const conditions: string[] = [VISIBLE_STATUS_CONDITION];
     const bindings: (string | number)[] = [];
 
     if (categoryId) {
-      conditions.push('w.category_id = ?');
-      bindings.push(categoryId);
+      const categoryIds = includeDescendants
+        ? await collectCategoryIdsWithDescendants(c.env.DB, categoryId)
+        : [categoryId];
+
+      if (c.env.DEBUG_LOGS === 'true') {
+        console.log('[websites] category filter', { categoryId, resolved: categoryIds });
+      }
+
+      if (categoryIds.length > 1) {
+        conditions.push(`w.category_id IN (${categoryIds.map(() => '?').join(',')})`);
+        bindings.push(...categoryIds);
+      } else {
+        conditions.push('w.category_id = ?');
+        bindings.push(categoryId);
+      }
     }
 
     if (search) {
@@ -232,37 +558,78 @@ websitesRouter.get('/', async (c) => {
     const baseQuery = `
       FROM websites w
       LEFT JOIN categories cat ON cat.id = w.category_id
+      LEFT JOIN users u ON u.id = w.submitted_by
       LEFT JOIN (
-        SELECT website_id, AVG(CAST(score AS REAL)) AS avg_rating, COUNT(*) AS rating_count
-        FROM ratings
+        SELECT
+          website_id,
+          SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END) AS upvotes,
+          SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END) AS downvotes,
+          SUM(value) AS score
+        FROM website_votes
         GROUP BY website_id
-      ) r ON r.website_id = w.id
+      ) wv ON wv.website_id = w.id
+      ${userId ? 'LEFT JOIN website_votes uv ON uv.website_id = w.id AND uv.user_id = ?' : ''}
       WHERE ${whereClause}
     `;
 
     const countRow = await c.env.DB.prepare(`SELECT COUNT(*) AS total ${baseQuery}`)
-      .bind(...bindings)
+      .bind(...(userId ? [userId, ...bindings] : bindings))
       .first<CountRow>();
 
     const total = countRow?.total ?? 0;
 
-    const rows = await c.env.DB.prepare(
-      `SELECT
-         w.id, w.name, w.url, w.description, w.logo_url, w.screenshot_url,
-         w.category_id, cat.name AS category_name, cat.slug AS category_slug,
-         w.status, w.featured, w.created_at, w.updated_at,
-         r.avg_rating, COALESCE(r.rating_count, 0) AS rating_count
-       ${baseQuery}
-       ORDER BY ${orderClause}
-       LIMIT ? OFFSET ?`,
-    )
-      .bind(...bindings, perPage, offset)
-      .all<WebsiteRow>()
-      .then((r) => r.results);
+    const executeWithColumns = async (includeMetadata: boolean) => {
+      const metadataSelect = includeMetadata ? 'w.metadata,' : '';
+       return c.env.DB.prepare(
+        `SELECT
+           w.id, w.name, w.url, w.description, w.logo_url, w.screenshot_url,
+           w.category_id, cat.name AS category_name, cat.slug AS category_slug,
+           w.status, w.submitted_by, w.featured, w.created_at, w.updated_at,
+           ${metadataSelect}
+           COALESCE(wv.upvotes, 0) AS upvotes,
+           COALESCE(wv.downvotes, 0) AS downvotes,
+           COALESCE(wv.score, 0) AS score,
+           ${userId ? 'uv.value AS user_vote' : 'NULL AS user_vote'},
+           u.name AS owner_name
+         ${baseQuery}
+         ORDER BY ${orderClause}
+         LIMIT ? OFFSET ?`,
+      )
+        .bind(...(userId ? [userId, ...bindings, perPage, offset] : [...bindings, perPage, offset]))
+        .all<WebsiteRow>()
+        .then((r) => r.results);
+    };
+
+    let rows: WebsiteRow[];
+    try {
+      rows = await executeWithColumns(true);
+    } catch (err) {
+      if (!isMissingMetadataColumn(err)) throw err;
+      rows = await executeWithColumns(false);
+    }
 
     const meta = buildPaginationMeta(total, page, perPage);
 
-    return c.json(createSuccess(rows, meta));
+    const data = rows.map((row) => ({
+      ...row,
+      featured: Boolean(row.featured),
+      metadata: parseMetadata(row.metadata),
+      owner_name: row.owner_name ?? null,
+      upvotes: row.upvotes ?? 0,
+      downvotes: row.downvotes ?? 0,
+      score: row.score ?? 0,
+    }));
+
+    if (c.env.DEBUG_LOGS === 'true') {
+      console.log('[websites] list result', {
+        total,
+        returned: data.length,
+        page,
+        perPage,
+      });
+    }
+
+    return c.json(createSuccess(data, meta));
   } catch (err) {
     console.error('[websites GET /]', err);
     return c.json(createError('INTERNAL_ERROR', 'Failed to fetch websites'), 500);
@@ -273,20 +640,31 @@ websitesRouter.get('/:id', optionalAuth, async (c) => {
   try {
     const { id } = c.req.param();
     const userId = c.get('userId');
-    const selectBase = `
+const selectBase = `
       SELECT
          w.id, w.name, w.url, w.description, w.logo_url, w.screenshot_url,
          w.category_id, cat.name AS category_name, cat.slug AS category_slug,
-         w.status, w.featured, w.created_at, w.updated_at,
-         AVG(CAST(r.score AS REAL)) AS avg_rating,
-         COALESCE(COUNT(r.id), 0) AS rating_count,
-         COALESCE(cmt.comment_count, 0) AS comment_count
-    `;
+         w.status, w.submitted_by, w.featured, w.created_at, w.updated_at, w.metadata,
+         COALESCE(wv.upvotes,0) AS upvotes,
+         COALESCE(wv.downvotes,0) AS downvotes,
+         COALESCE(wv.score,0) AS score,
+         COALESCE(cmt.comment_count, 0) AS comment_count,
+         u.name AS owner_name
+`;
 
-    const joinsBase = `
+const joinsBase = `
        FROM websites w
        LEFT JOIN categories cat ON cat.id = w.category_id
-       LEFT JOIN ratings r ON r.website_id = w.id
+       LEFT JOIN users u ON u.id = w.submitted_by
+       LEFT JOIN (
+         SELECT
+           website_id,
+           SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END) AS upvotes,
+           SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END) AS downvotes,
+           SUM(value) AS score
+         FROM website_votes
+         GROUP BY website_id
+       ) wv ON wv.website_id = w.id
        LEFT JOIN (
          SELECT website_id, COUNT(*) AS comment_count
          FROM comments
@@ -296,51 +674,162 @@ websitesRouter.get('/:id', optionalAuth, async (c) => {
     `;
 
     const whereClause = `
-       WHERE w.id = ? AND w.status = 'approved'
+       WHERE w.id = ? AND ${VISIBLE_STATUS_CONDITION}
        GROUP BY w.id
     `;
 
     let website: WebsiteRow | undefined;
 
-    if (userId) {
-      website = await c.env.DB.prepare(
-        `${selectBase},
-         ur.score AS user_rating
-         ${joinsBase}
-         LEFT JOIN ratings ur ON ur.website_id = w.id AND ur.user_id = ?
-         ${whereClause}`,
-      )
-        .bind(userId, id)
-        .first<WebsiteRow>();
-    } else {
-      website = await c.env.DB.prepare(
-        `${selectBase},
-         NULL AS user_rating
+    const runDetail = async (includeMetadata: boolean) => {
+      const metadataSelect = includeMetadata ? 'w.metadata,' : '';
+      const selectWithMeta = selectBase.replace('w.metadata,', metadataSelect);
+
+      if (userId) {
+        return c.env.DB.prepare(
+          `${selectWithMeta},
+           ur.value AS user_vote
+           ${joinsBase}
+           LEFT JOIN website_votes ur ON ur.website_id = w.id AND ur.user_id = ?
+           ${whereClause}`,
+        )
+          .bind(userId, id)
+          .first<WebsiteRow>();
+      }
+
+      return c.env.DB.prepare(
+        `${selectWithMeta},
+         NULL AS user_vote
          ${joinsBase}
          ${whereClause}`,
       )
         .bind(id)
         .first<WebsiteRow>();
+    };
+
+    try {
+      website = await runDetail(true);
+    } catch (err) {
+      if (!isMissingMetadataColumn(err)) throw err;
+      website = await runDetail(false);
     }
 
     if (!website) {
+      if (c.env.DEBUG_LOGS === 'true') {
+        console.log('[websites] detail not found', { id });
+      }
       return c.json(createError('NOT_FOUND', `Website '${id}' not found`), 404);
     }
 
-    return c.json(createSuccess(website));
+    if (c.env.DEBUG_LOGS === 'true') {
+      console.log('[websites] detail result', {
+        id: website.id,
+        category_id: website.category_id,
+        status: website.status,
+      });
+    }
+
+    return c.json(
+      createSuccess({
+        ...website,
+        featured: Boolean(website.featured),
+        metadata: parseMetadata(website.metadata),
+        upvotes: website.upvotes ?? 0,
+        downvotes: website.downvotes ?? 0,
+        score: website.score ?? 0,
+      }),
+    );
   } catch (err) {
     console.error('[websites GET /:id]', err);
     return c.json(createError('INTERNAL_ERROR', 'Failed to fetch website'), 500);
   }
 });
 
+async function upsertWebsiteVote(
+  db: Env['DB'],
+  websiteId: string,
+  userId: string,
+  value: -1 | 0 | 1,
+) {
+  if (value === 0) {
+    await db.prepare('DELETE FROM website_votes WHERE website_id = ? AND user_id = ?')
+      .bind(websiteId, userId)
+      .run();
+  } else {
+    await db.prepare(
+      `INSERT INTO website_votes (id, website_id, user_id, value)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(website_id, user_id) DO UPDATE SET value = excluded.value, created_at = CURRENT_TIMESTAMP`,
+    )
+      .bind(generateId(), websiteId, userId, value)
+      .run();
+  }
+
+  const summary = await db.prepare(
+    `SELECT
+       COALESCE(SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END), 0) AS upvotes,
+       COALESCE(SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END), 0) AS downvotes,
+       COALESCE(SUM(value), 0) AS score,
+       MAX(CASE WHEN user_id = ? THEN value END) AS user_vote
+     FROM website_votes
+     WHERE website_id = ?`,
+  )
+    .bind(userId, websiteId)
+    .first<{ upvotes: number; downvotes: number; score: number; user_vote: number | null }>();
+
+  return summary ?? { upvotes: 0, downvotes: 0, score: 0, user_vote: value };
+}
+
+websitesRouter.post('/:id/votes', requireAuth, async (c) => {
+  try {
+    const { id } = c.req.param();
+    const userId = c.get('userId');
+
+    const exists = await c.env.DB.prepare(
+      `SELECT id FROM websites WHERE id = ? AND ${VISIBLE_STATUS_CONDITION_NO_ALIAS}`,
+    )
+      .bind(id)
+      .first<{ id: string }>();
+
+    if (!exists) {
+      return c.json(createError('NOT_FOUND', 'Website não encontrado'), 404);
+    }
+
+    let body: { value?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
+    }
+
+    const { value } = body;
+    if (value !== 1 && value !== -1 && value !== 0) {
+      return c.json(createError('VALIDATION_ERROR', 'Voto inválido'), 400);
+    }
+
+    const summary = await upsertWebsiteVote(c.env.DB, id, userId, value);
+
+    return c.json(
+      createSuccess({
+        upvotes: summary.upvotes,
+        downvotes: summary.downvotes,
+        score: summary.score,
+        user_vote: summary.user_vote ?? value,
+      }),
+    );
+  } catch (err) {
+    console.error('[websites POST /:id/votes]', err);
+    return c.json(createError('INTERNAL_ERROR', 'Não foi possível registar o voto'), 500);
+  }
+});
+
+// Legacy support: map star ratings to votes to avoid breaking old clients.
 websitesRouter.post('/:id/ratings', requireAuth, async (c) => {
   try {
     const { id } = c.req.param();
     const userId = c.get('userId');
 
     const exists = await c.env.DB.prepare(
-      "SELECT id FROM websites WHERE id = ? AND status = 'approved'",
+      `SELECT id FROM websites WHERE id = ? AND ${VISIBLE_STATUS_CONDITION_NO_ALIAS}`,
     )
       .bind(id)
       .first<{ id: string }>();
@@ -357,47 +846,28 @@ websitesRouter.post('/:id/ratings', requireAuth, async (c) => {
     }
 
     const { score } = body;
-    if (
-      typeof score !== 'number' ||
-      !Number.isInteger(score) ||
-      score < MIN_RATING ||
-      score > MAX_RATING
-    ) {
-      return c.json(
-        createError('VALIDATION_ERROR', `Avaliação deve ser um número entre ${MIN_RATING} e ${MAX_RATING}`),
-        400,
-      );
+    if (typeof score !== 'number' || !Number.isInteger(score) || score < 1 || score > 5) {
+      return c.json(createError('VALIDATION_ERROR', 'Avaliação inválida'), 400);
     }
 
-    await c.env.DB.prepare(
-      `INSERT INTO ratings (id, website_id, user_id, score)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(website_id, user_id) DO UPDATE SET score = excluded.score, created_at = CURRENT_TIMESTAMP`,
-    )
-      .bind(generateId(), id, userId, score)
-      .run();
+    // Legacy mapping: 4-5 stars => upvote, 1-2 stars => downvote, 3 stars => neutral/remove vote,
+    // preserving the idea that a middle rating should not shift the balance.
+    let value: -1 | 0 | 1 = 0;
+    if (score >= 4) value = 1;
+    else if (score <= 2) value = -1;
 
-    const summary = await c.env.DB.prepare(
-      `SELECT
-         AVG(CAST(score AS REAL)) AS avg_rating,
-         COUNT(*) AS rating_count,
-         MAX(CASE WHEN user_id = ? THEN score END) AS user_rating
-       FROM ratings
-       WHERE website_id = ?`,
-    )
-      .bind(userId, id)
-      .first<{ avg_rating: number | null; rating_count: number; user_rating: number | null }>();
-
+    const summary = await upsertWebsiteVote(c.env.DB, id, userId, value);
     return c.json(
       createSuccess({
-        avg_rating: summary?.avg_rating ?? 0,
-        rating_count: summary?.rating_count ?? 0,
-        user_rating: summary?.user_rating ?? score,
+        upvotes: summary.upvotes,
+        downvotes: summary.downvotes,
+        score: summary.score,
+        user_vote: summary.user_vote ?? value,
       }),
     );
   } catch (err) {
     console.error('[websites POST /:id/ratings]', err);
-    return c.json(createError('INTERNAL_ERROR', 'Não foi possível guardar a avaliação'), 500);
+    return c.json(createError('INTERNAL_ERROR', 'Não foi possível registar o voto'), 500);
   }
 });
 
@@ -408,16 +878,31 @@ websitesRouter.get('/:id/comments', optionalAuth, async (c) => {
     const sortParam = url.searchParams.get('sort');
     const sort: CommentSort = sortParam === 'oldest' ? 'oldest' : 'newest';
     const orderClause = COMMENT_SORT_ORDER[sort];
+    const userId = c.get('userId');
 
     const rows = await c.env.DB.prepare(
       `SELECT
-         c.*, u.name AS user_name, u.avatar_url AS user_avatar
+         c.*, u.name AS user_name, u.avatar_url AS user_avatar,
+         COALESCE(v.upvotes, 0) AS upvotes,
+         COALESCE(v.downvotes, 0) AS downvotes,
+         COALESCE(v.score, 0) AS score,
+         ${userId ? 'uv.value AS user_vote' : 'NULL AS user_vote'}
        FROM comments c
        JOIN users u ON u.id = c.user_id
+       LEFT JOIN (
+         SELECT
+           comment_id,
+           SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END) AS upvotes,
+           SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END) AS downvotes,
+           SUM(value) AS score
+         FROM comment_votes
+         GROUP BY comment_id
+       ) v ON v.comment_id = c.id
+       ${userId ? 'LEFT JOIN comment_votes uv ON uv.comment_id = c.id AND uv.user_id = ?' : ''}
        WHERE c.website_id = ? AND c.status = 'visible'
        ORDER BY ${orderClause}`,
     )
-      .bind(id)
+      .bind(...(userId ? [userId, id] : [id]))
       .all<CommentRow>()
       .then((r) => r.results);
 
@@ -430,11 +915,16 @@ websitesRouter.get('/:id/comments', optionalAuth, async (c) => {
       status: row.status,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      kind: row.kind ?? 'general',
       user: {
         id: row.user_id,
         name: row.user_name,
         avatar_url: row.user_avatar,
       },
+      upvotes: row.upvotes ?? 0,
+      downvotes: row.downvotes ?? 0,
+      score: row.score ?? 0,
+      user_vote: row.user_vote ?? null,
       replies: [],
     }));
 
@@ -463,7 +953,7 @@ websitesRouter.post('/:id/comments', requireAuth, async (c) => {
     const userId = c.get('userId');
 
     const website = await c.env.DB.prepare(
-      "SELECT id FROM websites WHERE id = ? AND status = 'approved'",
+      `SELECT id FROM websites WHERE id = ? AND ${VISIBLE_STATUS_CONDITION_NO_ALIAS}`,
     )
       .bind(id)
       .first<{ id: string }>();
@@ -472,14 +962,14 @@ websitesRouter.post('/:id/comments', requireAuth, async (c) => {
       return c.json(createError('NOT_FOUND', 'Website não encontrado'), 404);
     }
 
-    let body: { content?: unknown; parentId?: unknown };
+    let body: { content?: unknown; parentId?: unknown; kind?: unknown };
     try {
       body = await c.req.json();
     } catch {
       return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
     }
 
-    const { content, parentId } = body;
+    const { content, parentId, kind } = body;
     if (
       typeof content !== 'string' ||
       content.trim().length < MIN_COMMENT_LENGTH ||
@@ -510,12 +1000,20 @@ websitesRouter.post('/:id/comments', requireAuth, async (c) => {
       }
     }
 
+    let normalizedKind = 'general';
+    if (kind !== undefined && kind !== null) {
+      if (typeof kind !== 'string' || !COMMENT_KINDS.has(kind)) {
+        return c.json(createError('VALIDATION_ERROR', 'Tipo de comentário inválido'), 400);
+      }
+      normalizedKind = kind;
+    }
+
     const commentId = generateId();
 
     await c.env.DB.prepare(
-      'INSERT INTO comments (id, website_id, user_id, content, parent_id, status) VALUES (?, ?, ?, ?, ?, "visible")',
+      'INSERT INTO comments (id, website_id, user_id, content, parent_id, status, kind) VALUES (?, ?, ?, ?, ?, "visible", ?)',
     )
-      .bind(commentId, id, userId, content.trim(), parentId ?? null)
+      .bind(commentId, id, userId, content.trim(), parentId ?? null, normalizedKind)
       .run();
 
     const inserted = await c.env.DB.prepare(
@@ -540,11 +1038,16 @@ websitesRouter.post('/:id/comments', requireAuth, async (c) => {
       status: inserted.status,
       created_at: inserted.created_at,
       updated_at: inserted.updated_at,
+      kind: inserted.kind ?? 'general',
       user: {
         id: inserted.user_id,
         name: inserted.user_name,
         avatar_url: inserted.user_avatar,
       },
+      upvotes: 0,
+      downvotes: 0,
+      score: 0,
+      user_vote: 0,
       replies: [],
     };
 
@@ -552,5 +1055,118 @@ websitesRouter.post('/:id/comments', requireAuth, async (c) => {
   } catch (err) {
     console.error('[websites POST /:id/comments]', err);
     return c.json(createError('INTERNAL_ERROR', 'Não foi possível criar o comentário'), 500);
+  }
+});
+
+websitesRouter.post('/comments/:commentId/votes', requireAuth, async (c) => {
+  try {
+    const { commentId } = c.req.param();
+    const userId = c.get('userId');
+
+    const comment = await c.env.DB.prepare('SELECT website_id FROM comments WHERE id = ? AND status = "visible"')
+      .bind(commentId)
+      .first<{ website_id: string }>();
+
+    if (!comment) {
+      return c.json(createError('NOT_FOUND', 'Comentário não encontrado'), 404);
+    }
+
+    let body: { value?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
+    }
+
+    const { value } = body;
+    if (value !== 1 && value !== -1 && value !== 0) {
+      return c.json(createError('VALIDATION_ERROR', 'Voto inválido'), 400);
+    }
+
+    if (value === 0) {
+      await c.env.DB.prepare('DELETE FROM comment_votes WHERE comment_id = ? AND user_id = ?')
+        .bind(commentId, userId)
+        .run();
+    } else {
+      await c.env.DB.prepare(
+        `INSERT INTO comment_votes (id, comment_id, user_id, value)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(comment_id, user_id) DO UPDATE SET value = excluded.value, created_at = CURRENT_TIMESTAMP`,
+      )
+        .bind(generateId(), commentId, userId, value)
+        .run();
+    }
+
+    const summary = await c.env.DB.prepare(
+      `SELECT
+         COALESCE(SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END), 0) AS upvotes,
+         COALESCE(SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END), 0) AS downvotes,
+         COALESCE(SUM(value), 0) AS score,
+         MAX(CASE WHEN user_id = ? THEN value END) AS user_vote
+       FROM comment_votes
+       WHERE comment_id = ?`,
+    )
+      .bind(userId, commentId)
+      .first<{ upvotes: number; downvotes: number; score: number; user_vote: number | null }>();
+
+    return c.json(createSuccess(summary ?? { upvotes: 0, downvotes: 0, score: 0, user_vote: value }));
+  } catch (err) {
+    console.error('[comments POST /comments/:commentId/votes]', err);
+    return c.json(createError('INTERNAL_ERROR', 'Não foi possível registar o voto'), 500);
+  }
+});
+
+websitesRouter.patch('/:id/status', requireAuth, async (c) => {
+  try {
+    const role = c.get('userRole');
+    if (role !== 'admin' && role !== 'moderator') {
+      return c.json(createError('FORBIDDEN', 'Sem permissões para moderar'), 403);
+    }
+
+    const { id } = c.req.param();
+    let body: { status?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
+    }
+
+    const status = body.status;
+    if (status !== 'approved' && status !== 'rejected') {
+      return c.json(createError('VALIDATION_ERROR', 'Estado inválido'), 400);
+    }
+
+    const website = await c.env.DB.prepare(
+      `SELECT w.id, w.name, w.submitted_by, u.email
+       FROM websites w
+       LEFT JOIN users u ON u.id = w.submitted_by
+       WHERE w.id = ?`,
+    )
+      .bind(id)
+      .first<{ id: string; name: string; submitted_by: string | null; email: string | null }>();
+
+    if (!website) {
+      return c.json(createError('NOT_FOUND', 'Website não encontrado'), 404);
+    }
+
+    await c.env.DB.prepare('UPDATE websites SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .bind(status, id)
+      .run();
+
+    if (website.submitted_by && website.email) {
+      await notifyStatusChange(c.env, {
+        userId: website.submitted_by,
+        email: website.email,
+        kind: 'website',
+        entityId: website.id,
+        name: website.name,
+        status,
+      });
+    }
+
+    return c.json(createSuccess({ id, status }));
+  } catch (err) {
+    console.error('[websites PATCH /:id/status]', err);
+    return c.json(createError('INTERNAL_ERROR', 'Não foi possível atualizar estado'), 500);
   }
 });

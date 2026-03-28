@@ -8,6 +8,7 @@ export interface WebsiteFilters {
   sort?: 'rating' | 'recent' | 'featured' | 'date' | 'popularity';
   page?: number;
   perPage?: number;
+  includeDescendants?: boolean;
 }
 
 export function useWebsites(filters: WebsiteFilters = {}) {
@@ -18,6 +19,7 @@ export function useWebsites(filters: WebsiteFilters = {}) {
   if (filters.sort) params.sort = filters.sort;
   if (filters.page) params.page = String(filters.page);
   if (filters.perPage) params.perPage = String(filters.perPage);
+  if (filters.includeDescendants) params.include_descendants = 'true';
 
   const query = useQuery({
     queryKey: ['websites', filters],
@@ -26,7 +28,34 @@ export function useWebsites(filters: WebsiteFilters = {}) {
       if (!response.success) {
         throw new Error(response.error?.message || 'Erro ao carregar websites');
       }
-      return response.data!;
+      // API pode responder em dois formatos:
+      // 1) { success, data: { data: Website[], meta } }
+      // 2) { success, data: Website[], meta }
+      const raw = response.data;
+      if (raw && !Array.isArray(raw) && 'data' in raw && 'meta' in raw) {
+        return raw as PaginatedResponse<Website>;
+      }
+
+      const dataArray = Array.isArray(raw) ? raw : [];
+      const fallbackPage = filters.page ?? 1;
+      const fallbackPerPage = filters.perPage ?? 20;
+      const providedMeta = response.meta ?? {};
+
+      const page = providedMeta.page ?? fallbackPage;
+      const perPage = providedMeta.perPage ?? fallbackPerPage;
+      const total = providedMeta.total ?? dataArray.length;
+      const totalPages = providedMeta.totalPages ?? Math.max(1, Math.ceil(total / perPage));
+
+      const meta = {
+        total,
+        page,
+        perPage,
+        totalPages,
+        hasNextPage: providedMeta.hasNextPage ?? page < totalPages,
+        hasPrevPage: providedMeta.hasPrevPage ?? page > 1,
+      };
+
+      return { data: dataArray, meta };
     },
   });
 

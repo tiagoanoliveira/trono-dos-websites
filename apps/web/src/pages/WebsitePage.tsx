@@ -1,28 +1,28 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDate, getInitials, cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/Spinner';
 import { Badge } from '@/components/ui/Badge';
-import { StarRating } from '@/components/ui/StarRating';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { WebsiteCard } from '@/components/features/WebsiteCard';
 import { useWebsiteById, useWebsites } from '@/hooks/useWebsites';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
 import type { Comment, Website } from '@/types';
-import { useComments, useAddComment } from '@/hooks/useComments';
+import { useComments, useAddComment, useVoteComment } from '@/hooks/useComments';
 
 export function WebsitePage() {
   const { id = '' } = useParams<{ id: string }>();
   const { website, isLoading, error } = useWebsiteById(id);
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [userRating, setUserRating] = useState<number>(0);
+  const [userVote, setUserVote] = useState<number>(0);
 
   const { comments, isLoading: commentsLoading } = useComments(id);
   const addCommentMutation = useAddComment(id);
+  const voteCommentMutation = useVoteComment(id);
 
   const { websites: relatedWebsites, isLoading: relatedLoading } = useWebsites({
     category_id: website?.category_id,
@@ -30,29 +30,39 @@ export function WebsitePage() {
   });
 
   useEffect(() => {
-    setUserRating(website?.user_rating ?? 0);
-  }, [website?.user_rating]);
+    setUserVote(website?.user_vote ?? 0);
+  }, [website?.user_vote]);
 
-  const ratingMutation = useMutation({
-    mutationFn: async (score: number) => {
-      const res = await api.post<{ avg_rating: number; rating_count: number; user_rating?: number | null }>(
-        `/websites/${id}/ratings`,
-        { score },
+  const metadata = website?.metadata ?? null;
+  const launchLabel = formatLaunchDate(metadata?.launch_date, metadata?.launch_precision);
+  const languagesLabel = metadata?.languages?.join(', ');
+  const isOpenSource = metadata?.is_open_source;
+  const sourceUrl = metadata?.source_url;
+  const images = metadata?.images;
+  const canSeeVoteBreakdown =
+    user?.role === 'admin' || (!!website?.submitted_by && website.submitted_by === user?.id);
+
+  const voteMutation = useMutation({
+    mutationFn: async (value: -1 | 0 | 1) => {
+      const res = await api.post<{ upvotes: number; downvotes: number; score: number; user_vote?: number | null }>(
+        `/websites/${id}/votes`,
+        { value },
       );
       if (!res.success || !res.data) {
-        throw new Error(res.error?.message ?? 'Erro ao guardar avaliação');
+        throw new Error(res.error?.message ?? 'Erro ao guardar voto');
       }
-      return { ...res.data, score };
+      return res.data;
     },
     onSuccess: (data) => {
-      setUserRating(data.user_rating ?? data.score);
+      setUserVote(data.user_vote ?? 0);
       queryClient.setQueryData<Website | undefined>(['websites', id], (prev) =>
         prev
           ? {
               ...prev,
-              avg_rating: data.avg_rating,
-              rating_count: data.rating_count,
-              user_rating: data.user_rating ?? data.score,
+              upvotes: data.upvotes,
+              downvotes: data.downvotes,
+              score: data.score,
+              user_vote: data.user_vote ?? 0,
             }
           : prev,
       );
@@ -112,9 +122,9 @@ export function WebsitePage() {
 
         {/* Header card */}
         <div className="card p-6 sm:p-8">
-          <div className="flex flex-col sm:flex-row items-start gap-6">
+          <div className="flex items-start gap-4 sm:gap-6">
             {/* Logo */}
-            <div className="shrink-0">
+            <div className="shrink-0 space-y-3">
               {website.logo_url ? (
                 <img
                   src={website.logo_url}
@@ -126,6 +136,35 @@ export function WebsitePage() {
                   {getInitials(website.name)}
                 </div>
               )}
+              <div className="flex items-center justify-center gap-2 rounded-full border border-throne-200 bg-throne-50 px-2 py-1">
+                <button
+                  className={cn(
+                    'inline-flex h-8 w-8 items-center justify-center rounded-full border border-throne-200 bg-white',
+                    userVote === 1 && 'border-crown-500 text-crown-700',
+                    voteMutation.isPending && 'opacity-60 cursor-not-allowed',
+                  )}
+                  onClick={() => (isAuthenticated ? voteMutation.mutate(userVote === 1 ? 0 : 1) : navigate('/entrar'))}
+                  disabled={voteMutation.isPending}
+                  aria-label="Upvote"
+                >
+                  ▲
+                </button>
+                <span className="min-w-12 text-center text-sm font-semibold text-throne-900">{website.score ?? 0}</span>
+                <button
+                  className={cn(
+                    'inline-flex h-8 w-8 items-center justify-center rounded-full border border-throne-200 bg-white',
+                    userVote === -1 && 'border-red-200 text-red-700',
+                    voteMutation.isPending && 'opacity-60 cursor-not-allowed',
+                  )}
+                  onClick={() =>
+                    isAuthenticated ? voteMutation.mutate(userVote === -1 ? 0 : -1) : navigate('/entrar')
+                  }
+                  disabled={voteMutation.isPending}
+                  aria-label="Downvote"
+                >
+                  ▼
+                </button>
+              </div>
             </div>
 
             {/* Info */}
@@ -156,13 +195,11 @@ export function WebsitePage() {
                 <p className="text-throne-600 leading-relaxed">{website.description}</p>
               )}
 
-              {/* Rating */}
-              <StarRating
-                score={website.avg_rating ?? 0}
-                count={website.rating_count ?? 0}
-                size="md"
-                showCount
-              />
+              {!isAuthenticated && (
+                <button className="text-sm text-crown-600 hover:text-crown-700" onClick={() => navigate('/entrar')}>
+                  Entrar para votar
+                </button>
+              )}
 
               {/* Meta */}
               <div className="flex items-center gap-4 text-sm text-throne-400 flex-wrap">
@@ -170,6 +207,41 @@ export function WebsitePage() {
                   <CalendarIcon className="h-4 w-4" />
                   Adicionado a {formatDate(website.created_at)}
                 </span>
+                {metadata?.author && (
+                  <span className="flex items-center gap-1">
+                    <UserIcon className="h-4 w-4" />
+                    {metadata?.author}
+                  </span>
+                )}
+                {launchLabel && (
+                  <span className="flex items-center gap-1">
+                    <CalendarIcon className="h-4 w-4" />
+                    Lançado: {launchLabel}
+                  </span>
+                )}
+                {languagesLabel && (
+                  <span className="flex items-center gap-1">
+                    <CodeIcon className="h-4 w-4" />
+                    {languagesLabel}
+                  </span>
+                )}
+                {isOpenSource && (
+                  <span className="flex items-center gap-1">
+                    <GithubIcon className="h-4 w-4" />
+                    {sourceUrl ? (
+                      <a
+                        href={sourceUrl}
+                        className="text-crown-600 hover:text-crown-700"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Código aberto
+                      </a>
+                    ) : (
+                      'Código aberto'
+                    )}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -199,15 +271,21 @@ export function WebsitePage() {
           </div>
         )}
 
-        <RatingSection
-          avgRating={website.avg_rating ?? 0}
-          ratingCount={website.rating_count ?? 0}
-          userRating={userRating}
-          isAuthenticated={isAuthenticated}
-          isSubmitting={ratingMutation.isPending}
-          onRate={(score) => ratingMutation.mutate(score)}
-          onRequireLogin={() => navigate('/entrar')}
-        />
+        {images && images.length > 0 && (
+          <div className="card p-4 space-y-3">
+            <h3 className="text-lg font-semibold text-throne-900">Screenshots</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {images.map((img, idx) => (
+                <img
+                  key={`${img}-${idx}`}
+                  src={img}
+                  alt={`Screenshot ${idx + 1} de ${website.name}`}
+                  className="w-full rounded-lg border border-throne-100 object-cover"
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         <CommentsSection
           comments={comments}
@@ -218,6 +296,9 @@ export function WebsitePage() {
           onSubmit={async (payload) => addCommentMutation.mutateAsync(payload)}
           isSubmitting={addCommentMutation.isPending}
           errorMessage={addCommentMutation.error instanceof Error ? addCommentMutation.error.message : ''}
+          onVote={(commentId, value) => voteCommentMutation.mutate({ commentId, value })}
+          voting={voteCommentMutation.isPending}
+           canSeeBreakdown={canSeeVoteBreakdown}
         />
 
         {/* Related websites */}
@@ -253,77 +334,6 @@ export function WebsitePage() {
   );
 }
 
-function RatingSection({
-  avgRating,
-  ratingCount,
-  userRating,
-  isAuthenticated,
-  isSubmitting,
-  onRate,
-  onRequireLogin,
-}: {
-  avgRating: number;
-  ratingCount: number;
-  userRating: number;
-  isAuthenticated: boolean;
-  isSubmitting: boolean;
-  onRate: (score: number) => void;
-  onRequireLogin: () => void;
-}) {
-  const [hovered, setHovered] = useState<number | null>(null);
-  const displaySelected = hovered ?? userRating;
-
-  return (
-    <div className="card p-6 space-y-4">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h2 className="text-lg font-semibold text-throne-800 flex items-center gap-2">
-            <span>⭐</span> Avaliações
-          </h2>
-          <p className="text-sm text-throne-500">
-            {ratingCount > 0 ? `Média baseada em ${ratingCount} avaliação${ratingCount > 1 ? 's' : ''}.` : 'Sê o primeiro a avaliar este website.'}
-          </p>
-        </div>
-        <StarRating score={avgRating} count={ratingCount} size="md" />
-      </div>
-
-      {isAuthenticated ? (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            {[1, 2, 3, 4, 5].map((value) => (
-              <button
-                key={value}
-                type="button"
-                className="p-1"
-                onMouseEnter={() => setHovered(value)}
-                onMouseLeave={() => setHovered(null)}
-                onFocus={() => setHovered(value)}
-                onBlur={() => setHovered(null)}
-                onClick={() => onRate(value)}
-                disabled={isSubmitting}
-                aria-label={`Avaliar com ${value} estrelas`}
-              >
-                <StarSelectableIcon filled={value <= displaySelected} />
-              </button>
-            ))}
-          </div>
-          <p className="text-sm text-throne-600">
-            {userRating > 0 ? `A tua avaliação: ${userRating}/5` : 'Escolhe uma classificação para partilhares a tua opinião.'}
-          </p>
-          {isSubmitting && <p className="text-xs text-throne-400">A guardar avaliação…</p>}
-        </div>
-      ) : (
-        <div className="flex items-center gap-3 text-sm text-throne-600">
-          <span>Inicia sessão para avaliar este website.</span>
-          <button className="btn-secondary px-3 py-1" onClick={onRequireLogin}>
-            Entrar
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function CommentsSection({
   comments,
   isLoading,
@@ -333,31 +343,41 @@ function CommentsSection({
   onSubmit,
   isSubmitting,
   errorMessage,
+  onVote,
+  voting,
+  canSeeBreakdown,
 }: {
   comments: Comment[];
   isLoading: boolean;
   totalComments: number;
   isAuthenticated: boolean;
   onLogin: () => void;
-  onSubmit: (payload: { content: string; parentId?: string | null }) => Promise<unknown>;
+  onSubmit: (payload: { content: string; parentId?: string | null; kind?: string }) => Promise<unknown>;
   isSubmitting: boolean;
   errorMessage?: string;
+  onVote: (commentId: string, value: -1 | 0 | 1) => void;
+  voting: boolean;
+  canSeeBreakdown: boolean;
 }) {
   const [content, setContent] = useState('');
+  const [kind, setKind] = useState('opinion');
   const [formError, setFormError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const handleSubmit = async () => {
     setFormError('');
-    setSuccessMsg('');
     if (!content.trim()) {
       setFormError('Escreve um comentário primeiro.');
       return;
     }
     try {
-      await onSubmit({ content: content.trim() });
+      await onSubmit({ content: content.trim(), kind });
       setContent('');
-      setSuccessMsg('Comentário publicado!');
+      setKind('opinion');
+      const el = textareaRef.current;
+      if (el) {
+        el.style.height = 'auto';
+      }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Não foi possível publicar o comentário.');
     }
@@ -375,39 +395,6 @@ function CommentsSection({
           </p>
         </div>
       </div>
-
-      {isAuthenticated ? (
-        <div className="space-y-2">
-          <label className="label">Partilha a tua opinião</label>
-          <textarea
-            className="input min-h-[120px]"
-            placeholder="Escreve algo útil para a comunidade..."
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            maxLength={1000}
-          />
-          <div className="flex items-center gap-3">
-            <button
-              className={cn('btn-primary', isSubmitting && 'opacity-60 cursor-not-allowed')}
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'A enviar…' : 'Publicar comentário'}
-            </button>
-            <span className="text-xs text-throne-400">{content.length}/1000</span>
-          </div>
-          {formError && <p className="text-sm text-red-600">{formError}</p>}
-          {errorMessage && !formError && <p className="text-sm text-red-600">{errorMessage}</p>}
-          {successMsg && <p className="text-sm text-green-600">{successMsg}</p>}
-        </div>
-      ) : (
-        <div className="flex items-center gap-3 text-sm text-throne-600">
-          <span>Inicia sessão para participar na conversa.</span>
-          <button className="btn-secondary px-3 py-1" onClick={onLogin}>
-            Entrar
-          </button>
-        </div>
-      )}
 
       <div className="border-t border-throne-100 pt-4 space-y-4">
         {isLoading ? (
@@ -429,10 +416,61 @@ function CommentsSection({
               onLogin={onLogin}
               onSubmit={onSubmit}
               isSubmitting={isSubmitting}
+              onVote={onVote}
+              voting={voting}
+              canSeeBreakdown={canSeeBreakdown}
             />
           ))
         )}
       </div>
+
+      {isAuthenticated ? (
+        <div className="space-y-1 border-t border-throne-100 pt-3">
+          <div className="rounded-xl border border-throne-200 bg-white">
+            <textarea
+              ref={textareaRef}
+              className="input min-h-[36px] border-none focus:ring-0 resize-none py-2 text-sm"
+              placeholder="Escrever comentário..."
+              value={content}
+              onChange={(e) => {
+                setContent(e.target.value);
+                const el = textareaRef.current;
+                if (el) {
+                  el.style.height = 'auto';
+                  el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+                }
+              }}
+              maxLength={1000}
+            />
+            <div className="flex items-center justify-between gap-3 border-t border-throne-100 px-3 py-1.5">
+              <select className="input h-8 w-36 text-xs" value={kind} onChange={(e) => setKind(e.target.value)}>
+                <option value="opinion">Opinião</option>
+                <option value="suggestion">Sugestão</option>
+                <option value="issue">Erro/bug</option>
+                <option value="praise">Elogio</option>
+                <option value="other">Outro</option>
+              </select>
+              <span className="text-[11px] text-throne-400">{content.length}/1000</span>
+              <button
+                className={cn('btn-primary h-8 px-3 text-sm', isSubmitting && 'opacity-60 cursor-not-allowed')}
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'A enviar…' : 'Enviar'}
+              </button>
+            </div>
+          </div>
+          {formError && <p className="text-sm text-red-600">{formError}</p>}
+          {errorMessage && !formError && <p className="text-sm text-red-600">{errorMessage}</p>}
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 text-sm text-throne-600 border-t border-throne-100 pt-3">
+          <span>Inicia sessão para participar na conversa.</span>
+          <button className="btn-secondary px-3 py-1" onClick={onLogin}>
+            Entrar
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -443,16 +481,23 @@ function CommentItem({
   onLogin,
   onSubmit,
   isSubmitting,
+  onVote,
+  voting,
+  canSeeBreakdown,
 }: {
   comment: Comment;
   isAuthenticated: boolean;
   onLogin: () => void;
-  onSubmit: (payload: { content: string; parentId?: string | null }) => Promise<unknown>;
+  onSubmit: (payload: { content: string; parentId?: string | null; kind?: string }) => Promise<unknown>;
   isSubmitting: boolean;
+  onVote: (commentId: string, value: -1 | 0 | 1) => void;
+  voting: boolean;
+  canSeeBreakdown: boolean;
 }) {
   const [replying, setReplying] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [error, setError] = useState('');
+  const replyRef = useRef<HTMLTextAreaElement | null>(null);
 
   const handleReply = async () => {
     setError('');
@@ -477,9 +522,50 @@ function CommentItem({
           <div className="flex items-center gap-2">
             <p className="font-semibold text-throne-800">{comment.user.name}</p>
             <span className="text-xs text-throne-400">{formatDate(comment.created_at)}</span>
+            {comment.kind && (
+              <span className="rounded-full bg-throne-100 px-2 py-0.5 text-[11px] font-medium text-throne-600">
+                {getCommentKindLabel(comment.kind)}
+              </span>
+            )}
           </div>
           <p className="text-throne-700 leading-relaxed">{comment.content}</p>
-          <div className="mt-2 flex items-center gap-3 text-sm text-throne-500">
+          <div className="mt-2 flex items-center gap-3 text-sm text-throne-500 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-2 rounded-full bg-throne-50 px-2 py-1 text-xs text-throne-600">
+                <span className="font-semibold text-throne-900">{comment.score}</span>
+                {canSeeBreakdown && (
+                  <span className="text-throne-400">
+                    {comment.upvotes} ↑ · {comment.downvotes} ↓
+                  </span>
+                )}
+              </span>
+              <button
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full border border-throne-200 px-2 py-1',
+                  (comment.user_vote ?? 0) === 1 && 'border-crown-400 text-crown-700',
+                  voting && 'opacity-60 cursor-not-allowed',
+                )}
+                onClick={() =>
+                  isAuthenticated ? onVote(comment.id, (comment.user_vote ?? 0) === 1 ? 0 : 1) : onLogin()
+                }
+                disabled={voting}
+              >
+                ▲
+              </button>
+              <button
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full border border-throne-200 px-2 py-1',
+                  (comment.user_vote ?? 0) === -1 && 'border-red-200 text-red-700',
+                  voting && 'opacity-60 cursor-not-allowed',
+                )}
+                onClick={() =>
+                  isAuthenticated ? onVote(comment.id, (comment.user_vote ?? 0) === -1 ? 0 : -1) : onLogin()
+                }
+                disabled={voting}
+              >
+                ▼
+              </button>
+            </div>
             {isAuthenticated ? (
               <button className="link" onClick={() => setReplying((v) => !v)}>
                 {replying ? 'Cancelar' : 'Responder'}
@@ -493,9 +579,17 @@ function CommentItem({
           {replying && (
             <div className="mt-2 space-y-2">
               <textarea
-                className="input min-h-[80px]"
+                ref={replyRef}
+                className="input min-h-[36px] resize-none py-2 text-sm"
                 value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
+                onChange={(e) => {
+                  setReplyText(e.target.value);
+                  const el = replyRef.current;
+                  if (el) {
+                    el.style.height = 'auto';
+                    el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+                  }
+                }}
                 placeholder="Responder a este comentário..."
               />
               <div className="flex items-center gap-2">
@@ -515,20 +609,23 @@ function CommentItem({
           )}
         </div>
       </div>
-      {comment.replies && comment.replies.length > 0 && (
-        <div className="ml-10 border-l border-throne-100 pl-4 space-y-3">
-          {comment.replies.map((reply) => (
-            <CommentItem
-              key={reply.id}
-              comment={reply}
-              isAuthenticated={isAuthenticated}
-              onLogin={onLogin}
-              onSubmit={onSubmit}
-              isSubmitting={isSubmitting}
-            />
-          ))}
-        </div>
-      )}
+        {comment.replies && comment.replies.length > 0 && (
+          <div className="ml-10 border-l border-throne-100 pl-4 space-y-3">
+            {comment.replies.map((reply) => (
+              <CommentItem
+                key={reply.id}
+                comment={reply}
+                isAuthenticated={isAuthenticated}
+                onLogin={onLogin}
+                onSubmit={onSubmit}
+                isSubmitting={isSubmitting}
+                onVote={onVote}
+                voting={voting}
+                canSeeBreakdown={canSeeBreakdown}
+              />
+            ))}
+          </div>
+        )}
     </div>
   );
 }
@@ -545,15 +642,62 @@ function AvatarBubble({ name, avatarUrl }: { name: string; avatarUrl: string | n
   );
 }
 
-function StarSelectableIcon({ filled }: { filled: boolean }) {
+function formatLaunchDate(
+  value?: string | null,
+  precision?: 'exact' | 'month' | 'year' | 'unknown' | null,
+) {
+  if (!value) return null;
+  try {
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return value;
+
+    if (precision === 'year') return String(dt.getUTCFullYear());
+    if (precision === 'month') {
+      return dt.toLocaleDateString('pt-PT', { year: 'numeric', month: 'short' });
+    }
+    return dt.toLocaleDateString('pt-PT');
+  } catch {
+    return value;
+  }
+}
+
+function getCommentKindLabel(kind?: string | null) {
+  switch (kind) {
+    case 'opinion':
+      return 'Opinião';
+    case 'suggestion':
+      return 'Sugestão';
+    case 'issue':
+      return 'Erro/bug';
+    case 'praise':
+      return 'Elogio';
+    case 'other':
+      return 'Outro';
+    default:
+      return 'Comentário';
+  }
+}
+
+function CodeIcon({ className }: { className?: string }) {
   return (
-    <svg
-      className={filled ? 'h-6 w-6 text-crown-500' : 'h-6 w-6 text-throne-300'}
-      viewBox="0 0 20 20"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16 18l6-6-6-6M8 6l-6 6 6 6" />
+    </svg>
+  );
+}
+
+function GithubIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 .5C5.73.5.5 5.74.5 12.02c0 5.11 3.29 9.44 7.86 10.98.58.11.79-.25.79-.56v-2.02c-3.2.7-3.87-1.54-3.87-1.54-.52-1.33-1.27-1.69-1.27-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.02 1.74 2.68 1.24 3.33.95.1-.74.4-1.24.73-1.53-2.55-.29-5.23-1.28-5.23-5.71 0-1.26.45-2.29 1.18-3.09-.12-.29-.51-1.45.11-3.02 0 0 .96-.31 3.14 1.18a10.9 10.9 0 0 1 2.86-.39c.97 0 1.95.13 2.86.39 2.17-1.49 3.13-1.18 3.13-1.18.63 1.57.24 2.73.12 3.02.73.8 1.18 1.83 1.18 3.1 0 4.44-2.68 5.41-5.24 5.7.41.36.78 1.07.78 2.16v3.2c0 .31.21.68.8.56A10.53 10.53 0 0 0 23.5 12C23.5 5.74 18.27.5 12 .5Z" />
+    </svg>
+  );
+}
+
+function UserIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14c-4.418 0-8 1.79-8 4v2h16v-2c0-2.21-3.582-4-8-4z" />
     </svg>
   );
 }

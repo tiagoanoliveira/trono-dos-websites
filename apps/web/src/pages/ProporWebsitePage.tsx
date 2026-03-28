@@ -5,14 +5,8 @@ import { Badge } from '@/components/ui/Badge';
 import { useCategories } from '@/hooks/useCategories';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
-
-type MySuggestion = {
-  id: string;
-  name: string;
-  description: string | null;
-  status: string;
-  created_at: string;
-};
+import { ALLOWED_LANGUAGES } from '@/constants/languages';
+import { uploadImage } from '@/hooks/useImageUpload';
 
 type MyWebsite = {
   id: string;
@@ -50,8 +44,23 @@ export function ProporWebsitePage() {
     url: '',
     description: '',
     category_id: '',
+    logo_url: '',
+    screenshot_url: '',
   });
-  const [categoryForm, setCategoryForm] = useState({ name: '', description: '' });
+  const [metadata, setMetadata] = useState({
+    author: '',
+    launchDate: '',
+    launchPrecision: 'unknown' as 'exact' | 'month' | 'year' | 'unknown',
+    languages: [] as string[],
+    isOpenSource: false,
+    sourceUrl: '',
+    images: [''],
+  });
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
+  const [uploadingMetaIndex, setUploadingMetaIndex] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState('');
+  const [websiteNotificationsOnly, setWebsiteNotificationsOnly] = useState(false);
 
   const categoryOptions = useMemo(() => {
     const options: { value: string; label: string }[] = [];
@@ -66,25 +75,35 @@ export function ProporWebsitePage() {
 
   const submitWebsite = useMutation({
     mutationFn: async () => {
-      const res = await api.post<MyWebsite>('/websites', form);
+      const payload = {
+        ...form,
+        metadata: {
+          author: metadata.author || undefined,
+          launchDate: metadata.launchDate || undefined,
+          launchPrecision: metadata.launchPrecision,
+          languages: metadata.languages,
+          images: metadata.images.map((img) => img.trim()).filter(Boolean),
+          isOpenSource: metadata.isOpenSource,
+          sourceUrl: metadata.sourceUrl || undefined,
+        },
+      };
+
+      const res = await api.post<MyWebsite>('/websites', payload);
       if (!res.success || !res.data) throw new Error(res.error?.message ?? 'Erro ao submeter');
       return res.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-websites'] });
-      setForm({ name: '', url: '', description: '', category_id: '' });
-    },
-  });
-
-  const submitCategory = useMutation({
-    mutationFn: async () => {
-      const res = await api.post<MySuggestion>('/categories/suggestions', categoryForm);
-      if (!res.success || !res.data) throw new Error(res.error?.message ?? 'Erro ao sugerir');
-      return res.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['my-category-suggestions'] });
-      setCategoryForm({ name: '', description: '' });
+      setForm({ name: '', url: '', description: '', category_id: '', logo_url: '', screenshot_url: '' });
+      setMetadata({
+        author: '',
+        launchDate: '',
+        launchPrecision: 'unknown',
+        languages: [],
+        isOpenSource: false,
+        sourceUrl: '',
+        images: [''],
+      });
     },
   });
 
@@ -98,11 +117,13 @@ export function ProporWebsitePage() {
     enabled: isAuthenticated,
   });
 
-  const mySuggestions = useQuery({
-    queryKey: ['my-category-suggestions'],
+  const notifications = useQuery({
+    queryKey: ['notifications', 'mine'],
     queryFn: async () => {
-      const res = await api.get<MySuggestion[]>('/categories/suggestions/mine');
-      if (!res.success || !res.data) throw new Error(res.error?.message ?? 'Erro ao carregar');
+      const res = await api.get<Array<{ id: string; title: string; message: string; entity_type?: string | null }>>(
+        '/notifications/mine',
+      );
+      if (!res.success || !res.data) throw new Error(res.error?.message ?? 'Erro ao carregar notificações');
       return res.data;
     },
     enabled: isAuthenticated,
@@ -175,6 +196,74 @@ export function ProporWebsitePage() {
               />
             </div>
             <div>
+              <label className="label">Logo</label>
+              <div className="mt-2">
+                <input
+                  id="logo-upload"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploadError('');
+                    setUploadingLogo(true);
+                    try {
+                      const uploadedUrl = await uploadImage(file, 'logo');
+                      setForm((f) => ({ ...f, logo_url: uploadedUrl }));
+                    } catch (err) {
+                      setUploadError(err instanceof Error ? err.message : 'Falha ao enviar logo.');
+                    } finally {
+                      setUploadingLogo(false);
+                      e.target.value = '';
+                    }
+                  }}
+                />
+                <label htmlFor="logo-upload" className="btn-secondary cursor-pointer inline-flex">
+                  {uploadingLogo ? 'A enviar logo…' : 'Carregar logo'}
+                </label>
+                {form.logo_url && (
+                  <img src={form.logo_url} alt="Pré-visualização do logo" className="mt-3 h-16 w-16 rounded-lg object-cover border border-throne-100" />
+                )}
+              </div>
+            </div>
+            <div>
+              <label className="label">Screenshot</label>
+              <div className="mt-2">
+                <input
+                  id="screenshot-upload"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploadError('');
+                    setUploadingScreenshot(true);
+                    try {
+                      const uploadedUrl = await uploadImage(file, 'screenshot');
+                      setForm((f) => ({ ...f, screenshot_url: uploadedUrl }));
+                    } catch (err) {
+                      setUploadError(err instanceof Error ? err.message : 'Falha ao enviar screenshot.');
+                    } finally {
+                      setUploadingScreenshot(false);
+                      e.target.value = '';
+                    }
+                  }}
+                />
+                <label htmlFor="screenshot-upload" className="btn-secondary cursor-pointer inline-flex">
+                  {uploadingScreenshot ? 'A enviar screenshot…' : 'Carregar screenshot'}
+                </label>
+                {form.screenshot_url && (
+                  <img
+                    src={form.screenshot_url}
+                    alt="Pré-visualização do screenshot"
+                    className="mt-3 w-full max-w-sm rounded-lg object-cover border border-throne-100"
+                  />
+                )}
+              </div>
+            </div>
+            <div>
               <label className="label">Descrição</label>
               <textarea
                 className="input min-h-[96px]"
@@ -200,11 +289,169 @@ export function ProporWebsitePage() {
                 ))}
               </select>
             </div>
+            <div>
+              <label className="label">Autor / Equipa</label>
+              <input
+                className="input"
+                placeholder="Ex: Tiago Oliveira ou Equipa XPTO"
+                value={metadata.author}
+                onChange={(e) => setMetadata((m) => ({ ...m, author: e.target.value }))}
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="label">Data de lançamento</label>
+                <input
+                  className="input"
+                  type={metadata.launchPrecision === 'exact' ? 'date' : metadata.launchPrecision === 'month' ? 'month' : 'text'}
+                  placeholder="AAAA-MM ou AAAA"
+                  value={metadata.launchDate}
+                  onChange={(e) => setMetadata((m) => ({ ...m, launchDate: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label">Precisão</label>
+                <select
+                  className="input"
+                  value={metadata.launchPrecision}
+                  onChange={(e) =>
+                    setMetadata((m) => ({ ...m, launchPrecision: e.target.value as typeof m.launchPrecision }))
+                  }
+                >
+                  <option value="exact">Data exata</option>
+                  <option value="month">Mês + ano</option>
+                  <option value="year">Só ano</option>
+                  <option value="unknown">Não sei</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="label">Linguagens utilizadas</label>
+              <div className="space-y-2">
+                <select
+                  className="input"
+                  value=""
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (!value) return;
+                    setMetadata((m) =>
+                      m.languages.includes(value) ? m : { ...m, languages: [...m.languages, value] },
+                    );
+                  }}
+                >
+                  <option value="">Seleciona</option>
+                  {ALLOWED_LANGUAGES.filter((lang) => !metadata.languages.includes(lang)).map((lang) => (
+                    <option key={lang} value={lang}>
+                      {lang}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex flex-wrap gap-2">
+                  {metadata.languages.length === 0 ? (
+                    <span className="text-xs text-throne-500">Nenhuma linguagem selecionada</span>
+                  ) : (
+                    metadata.languages.map((lang) => (
+                      <span
+                        key={lang}
+                        className="inline-flex items-center gap-2 rounded-full bg-throne-100 px-3 py-1 text-sm text-throne-700"
+                      >
+                        {lang}
+                        <button
+                          type="button"
+                          className="text-throne-400 hover:text-throne-700"
+                          onClick={() =>
+                            setMetadata((m) => ({
+                              ...m,
+                              languages: m.languages.filter((l) => l !== lang),
+                            }))
+                          }
+                          aria-label={`Remover ${lang}`}
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-throne-500">Lista controlada para manter consistência.</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="label">Screenshots adicionais</label>
+              {metadata.images.map((img, idx) => (
+                <div key={idx} className="flex gap-2">
+                  {idx === metadata.images.length - 1 && (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => setMetadata((m) => ({ ...m, images: [...m.images, ''] }))}
+                    >
+                      + Screenshot
+                    </button>
+                  )}
+                  <input
+                    id={`meta-image-upload-${idx}`}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setUploadError('');
+                      setUploadingMetaIndex(idx);
+                      try {
+                        const uploadedUrl = await uploadImage(file, 'website-image');
+                        setMetadata((m) => ({
+                          ...m,
+                          images: m.images.map((current, currentIdx) =>
+                            currentIdx === idx ? uploadedUrl : current,
+                          ),
+                        }));
+                      } catch (err) {
+                        setUploadError(err instanceof Error ? err.message : 'Falha ao enviar screenshot.');
+                      } finally {
+                        setUploadingMetaIndex(null);
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                  <label
+                    htmlFor={`meta-image-upload-${idx}`}
+                    className="btn-secondary cursor-pointer inline-flex whitespace-nowrap"
+                  >
+                    {uploadingMetaIndex === idx ? 'A enviar…' : 'Upload'}
+                  </label>
+                  {img && (
+                    <img src={img} alt={`Pré-visualização ${idx + 1}`} className="h-16 w-16 rounded object-cover border border-throne-100" />
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-throne-700">
+                <input
+                  type="checkbox"
+                  checked={metadata.isOpenSource}
+                  onChange={(e) => setMetadata((m) => ({ ...m, isOpenSource: e.target.checked }))}
+                />
+                É open-source?
+              </label>
+              {metadata.isOpenSource && (
+                <input
+                  className="input"
+                  type="url"
+                  placeholder="Link para o repositório"
+                  value={metadata.sourceUrl}
+                  onChange={(e) => setMetadata((m) => ({ ...m, sourceUrl: e.target.value }))}
+                />
+              )}
+            </div>
             {submitWebsite.error && (
               <p className="text-sm text-red-600">
                 {(submitWebsite.error as Error).message || 'Erro ao submeter'}
               </p>
             )}
+            {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
             {submitWebsite.isSuccess && (
               <p className="text-sm text-green-700 bg-green-50 border border-green-200 px-3 py-2 rounded-lg">
                 Submissão enviada! Avisar-te-emos quando for revista.
@@ -220,54 +467,6 @@ export function ProporWebsitePage() {
           </form>
         </div>
 
-        <div className="card p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-throne-900">Sugerir categoria</h2>
-            <Badge variant="info">Ajuda a organizar</Badge>
-          </div>
-          <form
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              submitCategory.mutate();
-            }}
-          >
-            <div>
-              <label className="label">Nome</label>
-              <input
-                className="input"
-                value={categoryForm.name}
-                onChange={(e) => setCategoryForm((f) => ({ ...f, name: e.target.value }))}
-                required
-              />
-            </div>
-            <div>
-              <label className="label">Descrição (opcional)</label>
-              <textarea
-                className="input min-h-[96px]"
-                value={categoryForm.description}
-                onChange={(e) => setCategoryForm((f) => ({ ...f, description: e.target.value }))}
-              />
-            </div>
-            {submitCategory.error && (
-              <p className="text-sm text-red-600">
-                {(submitCategory.error as Error).message || 'Erro ao sugerir'}
-              </p>
-            )}
-            {submitCategory.isSuccess && (
-              <p className="text-sm text-green-700 bg-green-50 border border-green-200 px-3 py-2 rounded-lg">
-                Sugestão enviada! Vamos analisar e avisar-te.
-              </p>
-            )}
-            <button
-              type="submit"
-              className="btn-secondary w-full justify-center"
-              disabled={submitCategory.isPending}
-            >
-              {submitCategory.isPending ? 'A enviar…' : 'Sugerir categoria'}
-            </button>
-          </form>
-        </div>
       </div>
 
       <div className="card p-6 space-y-4">
@@ -301,30 +500,34 @@ export function ProporWebsitePage() {
               ))}
             </div>
           </div>
-          <div>
-            <h4 className="text-sm font-semibold text-throne-700 mb-2">Sugestões de categoria</h4>
-            <div className="space-y-2">
-              {mySuggestions.isLoading && <p className="text-sm text-throne-500">A carregar…</p>}
-              {mySuggestions.data?.length === 0 && (
-                <p className="text-sm text-throne-500">Ainda não sugeriste categorias.</p>
-              )}
-              {mySuggestions.data?.map((sug) => (
-                <div
-                  key={sug.id}
-                  className="flex items-center justify-between rounded-lg border border-throne-100 bg-throne-50 px-3 py-2"
-                >
-                  <div>
-                    <p className="font-medium text-throne-900 leading-tight">{sug.name}</p>
-                    {sug.description ? (
-                      <p className="text-xs text-throne-500 line-clamp-2">{sug.description}</p>
-                    ) : null}
-                  </div>
-                  <StatusBadge status={sug.status} />
-                </div>
-              ))}
-            </div>
+          <div className="flex items-center justify-center">
+            <Link to="/propor-categoria" className="btn-secondary">
+              Sugerir categoria (página separada)
+            </Link>
           </div>
         </div>
+      </div>
+      <div className="card p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-throne-900">Notificações</h3>
+          <label className="text-sm text-throne-600 flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={websiteNotificationsOnly}
+              onChange={(e) => setWebsiteNotificationsOnly(e.target.checked)}
+            />
+            Só websites
+          </label>
+        </div>
+        {notifications.isLoading && <p className="text-sm text-throne-500">A carregar…</p>}
+        {notifications.data
+          ?.filter((n) => (websiteNotificationsOnly ? n.entity_type === 'website' : true))
+          .map((n) => (
+            <div key={n.id} className="rounded-lg border border-throne-100 bg-throne-50 px-3 py-2">
+              <p className="font-medium text-throne-900">{n.title}</p>
+              <p className="text-sm text-throne-600">{n.message}</p>
+            </div>
+          ))}
       </div>
     </div>
   );

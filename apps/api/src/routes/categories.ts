@@ -3,6 +3,7 @@ import type { Env } from '../index';
 import { createSuccess, createError, generateId, getPaginationParams, buildPaginationMeta } from '../utils/helpers';
 import { requireAuth, type AuthContext } from '../middleware/auth';
 import { MIN_NAME_LENGTH } from '../utils/validation';
+import { notifyStatusChange } from '../services/notifications';
 
 type CategoryRow = {
   id: string;
@@ -16,9 +17,7 @@ type CategoryRow = {
   website_count: number;
 };
 
-type CategoryWithChildren = Omit<CategoryRow, 'parent_id'> & {
-  children: CategoryRow[];
-};
+type CategoryNode = CategoryRow & { children: CategoryNode[] };
 
 type CategorySuggestionRow = {
   id: string;
@@ -108,18 +107,63 @@ categoriesRouter.get('/suggestions/mine', requireAuth, async (c) => {
   }
 });
 
+type SerializedCategory = Omit<CategoryRow, 'website_count'> & {
+  website_count: number;
+  children: SerializedCategory[];
+};
+
+function serializeCategory(node: CategoryNode): SerializedCategory {
+  const serializedChildren = node.children.map(serializeCategory);
+  const childrenTotal = serializedChildren.reduce((sum, child) => sum + child.website_count, 0);
+
+  return {
+    ...node,
+    website_count: node.website_count + childrenTotal,
+    children: serializedChildren,
+  };
+}
+
+function buildCategoryTree(rows: CategoryRow[]) {
+  const nodes = new Map<string, CategoryNode>();
+  const slugMap = new Map<string, CategoryNode>();
+
+  rows.forEach((row) => {
+    const node: CategoryNode = { ...row, children: [] };
+    nodes.set(node.id, node);
+    slugMap.set(node.slug, node);
+  });
+
+  nodes.forEach((node) => {
+    if (node.parent_id && nodes.has(node.parent_id)) {
+      nodes.get(node.parent_id)?.children.push(node);
+    }
+  });
+
+  const roots = Array.from(nodes.values()).filter((node) => node.parent_id === null);
+
+  return {
+    roots: roots.map(serializeCategory),
+    nodes,
+    slugMap,
+  };
+}
+
 categoriesRouter.get('/', async (c) => {
   try {
     const { searchParams } = new URL(c.req.url);
     const parentIdFilter = searchParams.get('parent_id');
+
+    if (c.env.DEBUG_LOGS === 'true') {
+      console.log('[categories] list request', { parentIdFilter });
+    }
 
     const rows = await c.env.DB.prepare(
       `SELECT
          c.id, c.name, c.slug, c.description, c.icon, c.parent_id, c.status, c.created_at,
          COUNT(w.id) AS website_count
        FROM categories c
-       LEFT JOIN websites w
-         ON w.category_id = c.id AND w.status = 'approved'
+         LEFT JOIN websites w
+          ON w.category_id = c.id AND (w.status IN ('approved', 'active') OR w.status IS NULL)
        WHERE c.status = 'active'
        GROUP BY c.id
        ORDER BY c.parent_id NULLS FIRST, c.name ASC`,
@@ -127,24 +171,21 @@ categoriesRouter.get('/', async (c) => {
       .all<CategoryRow>()
       .then((r) => r.results);
 
-    if (parentIdFilter !== null) {
-      const filtered = rows.filter((r) => r.parent_id === parentIdFilter);
-      return c.json(createSuccess(filtered));
+    const { roots, nodes } = buildCategoryTree(rows);
+    if (c.env.DEBUG_LOGS === 'true') {
+      console.log('[categories] list result', {
+        total: rows.length,
+        roots: roots.length,
+        withParentFilter: parentIdFilter,
+      });
     }
 
-    // Build hierarchical structure: parents with embedded children
-    const parents = rows.filter((r) => r.parent_id === null);
-    const children = rows.filter((r) => r.parent_id !== null);
+    if (parentIdFilter !== null) {
+      const children = Array.from(nodes.values()).filter((node) => node.parent_id === parentIdFilter);
+      return c.json(createSuccess(children.map(serializeCategory)));
+    }
 
-    const data: CategoryWithChildren[] = parents.map((parent) => {
-      const { parent_id: _omit, ...rest } = parent;
-      return {
-        ...rest,
-        children: children.filter((ch) => ch.parent_id === parent.id),
-      };
-    });
-
-    return c.json(createSuccess(data));
+    return c.json(createSuccess(roots));
   } catch (err) {
     console.error('[categories GET /]', err);
     return c.json(createError('INTERNAL_ERROR', 'Failed to fetch categories'), 500);
@@ -154,27 +195,103 @@ categoriesRouter.get('/', async (c) => {
 categoriesRouter.get('/:slug', async (c) => {
   try {
     const { slug } = c.req.param();
+    if (c.env.DEBUG_LOGS === 'true') {
+      console.log('[categories] detail request', { slug });
+    }
 
-    const category = await c.env.DB.prepare(
+    const rows = await c.env.DB.prepare(
       `SELECT
          c.id, c.name, c.slug, c.description, c.icon, c.parent_id, c.status, c.created_at,
          COUNT(w.id) AS website_count
        FROM categories c
-       LEFT JOIN websites w
-         ON w.category_id = c.id AND w.status = 'approved'
-       WHERE c.slug = ? AND c.status = 'active'
+         LEFT JOIN websites w
+          ON w.category_id = c.id AND (w.status IN ('approved', 'active') OR w.status IS NULL)
+       WHERE c.status = 'active'
        GROUP BY c.id`,
     )
-      .bind(slug)
-      .first<CategoryRow>();
+      .all<CategoryRow>()
+      .then((r) => r.results);
 
-    if (!category) {
+    const { slugMap } = buildCategoryTree(rows);
+    const node = slugMap.get(slug);
+
+    if (!node) {
+      if (c.env.DEBUG_LOGS === 'true') {
+        console.log('[categories] detail not found', { slug });
+      }
       return c.json(createError('NOT_FOUND', `Category '${slug}' not found`), 404);
     }
 
-    return c.json(createSuccess(category));
+    // If the node is not a root, ensure its subtree is still fully serialized
+    const serialized = serializeCategory(node);
+    if (c.env.DEBUG_LOGS === 'true') {
+      console.log('[categories] detail result', {
+        slug,
+        id: serialized.id,
+        parent_id: serialized.parent_id,
+        children: serialized.children.length,
+      });
+    }
+    return c.json(createSuccess(serialized));
   } catch (err) {
     console.error('[categories GET /:slug]', err);
     return c.json(createError('INTERNAL_ERROR', 'Failed to fetch category'), 500);
+  }
+});
+
+categoriesRouter.patch('/suggestions/:id/status', requireAuth, async (c) => {
+  try {
+    const role = c.get('userRole');
+    if (role !== 'admin' && role !== 'moderator') {
+      return c.json(createError('FORBIDDEN', 'Sem permissões para moderar'), 403);
+    }
+
+    const { id } = c.req.param();
+    let body: { status?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
+    }
+
+    const status = body.status;
+    if (status !== 'approved' && status !== 'rejected') {
+      return c.json(createError('VALIDATION_ERROR', 'Estado inválido'), 400);
+    }
+
+    const suggestion = await c.env.DB.prepare(
+      `SELECT cs.id, cs.name, cs.suggested_by, u.email
+       FROM category_suggestions cs
+       LEFT JOIN users u ON u.id = cs.suggested_by
+       WHERE cs.id = ?`,
+    )
+      .bind(id)
+      .first<{ id: string; name: string; suggested_by: string | null; email: string | null }>();
+
+    if (!suggestion) {
+      return c.json(createError('NOT_FOUND', 'Sugestão não encontrada'), 404);
+    }
+
+    await c.env.DB.prepare(
+      'UPDATE category_suggestions SET status = ?, reviewed_by = ? WHERE id = ?',
+    )
+      .bind(status, c.get('userId'), id)
+      .run();
+
+    if (suggestion.suggested_by && suggestion.email) {
+      await notifyStatusChange(c.env, {
+        userId: suggestion.suggested_by,
+        email: suggestion.email,
+        kind: 'category',
+        entityId: suggestion.id,
+        name: suggestion.name,
+        status,
+      });
+    }
+
+    return c.json(createSuccess({ id, status }));
+  } catch (err) {
+    console.error('[categories PATCH /suggestions/:id/status]', err);
+    return c.json(createError('INTERNAL_ERROR', 'Não foi possível atualizar estado da sugestão'), 500);
   }
 });

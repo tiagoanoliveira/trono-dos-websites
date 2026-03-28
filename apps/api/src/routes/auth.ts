@@ -4,6 +4,8 @@ import { hashPassword, verifyPassword, createJWT } from '../services/auth';
 import { generateId, createSuccess, createError } from '../utils/helpers';
 import { requireAuth, type AuthContext } from '../middleware/auth';
 import { buildAuthCookie, clearAuthCookie } from '../utils/authCookie';
+import { isAllowedUploadUrl } from '../utils/uploadUrl';
+import { sendPasswordResetEmail, sendRegistrationEmail } from '../services/email';
 
 type DbUser = {
   id: string;
@@ -97,6 +99,7 @@ authRouter.post('/register', async (c) => {
   );
 
   c.header('Set-Cookie', buildAuthCookie(token, c.env.ENVIRONMENT, JWT_EXPIRES));
+  await sendRegistrationEmail(c.env, user.email, user.name);
   return c.json(createSuccess({ token, user: formatUser(user) }), 201);
 });
 
@@ -181,6 +184,9 @@ authRouter.put('/me', requireAuth, async (c) => {
     if (body.avatar_url !== null && typeof body.avatar_url !== 'string') {
       return c.json(createError('VALIDATION_ERROR', 'URL de avatar inválida'), 400);
     }
+    if (typeof body.avatar_url === 'string' && body.avatar_url.trim() && !isAllowedUploadUrl(body.avatar_url, c.env)) {
+      return c.json(createError('VALIDATION_ERROR', 'Avatar deve ser carregado via upload R2'), 400);
+    }
     updates.push('avatar_url = ?');
     values.push(body.avatar_url);
   }
@@ -241,6 +247,13 @@ authRouter.post('/forgot-password', async (c) => {
   )
     .bind(id, user.id, token, expiresAt)
     .run();
+
+  const fullUser = await c.env.DB.prepare('SELECT email, name FROM users WHERE id = ?')
+    .bind(user.id)
+    .first<{ email: string; name: string }>();
+  if (fullUser) {
+    await sendPasswordResetEmail(c.env, fullUser.email, token);
+  }
 
   if (c.env.ENVIRONMENT === 'development') {
     return c.json(createSuccess({ message: 'Token gerado', token }));

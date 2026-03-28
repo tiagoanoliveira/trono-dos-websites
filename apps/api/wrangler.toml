@@ -12,4 +12,10 @@ migrations_dir = "../../migrations"
 
 [vars]
 ENVIRONMENT = "production"
+R2_PUBLIC_BASE_URL = ""
+APP_BASE_URL = ""
+EMAIL_FROM = ""
 
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "trono-assets"

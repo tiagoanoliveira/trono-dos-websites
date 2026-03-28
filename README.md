@@ -159,10 +159,10 @@ CREATE TABLE category_suggestions (
 - [x] Respostas a comentários (threading)
 - [x] Ordenação por avaliação/data/popularidade
 ### Fase 4 — Contribuições 
-- [ ] Formulário para propor novo website
-- [ ] Formulário para sugerir nova categoria
-- [ ] Painel de "minhas contribuições"
-- [ ] Notificações de estado (aprovado/rejeitado)
+- [x] Formulário para propor novo website
+- [x] Formulário para sugerir nova categoria
+- [x] Painel de "minhas contribuições"
+- [x] Notificações de estado (aprovado/rejeitado)
 ### Fase 5 — Comparativos Diários
 - [ ] Geração automática de comparativos (Cron via Workers)
 - [ ] Página do comparativo do dia
@@ -248,6 +248,13 @@ npm run dev
 
 # Correr migrações
 npm run db:migrate
+
+# Migrações recentes
+# - 001_add_website_metadata.sql (coluna metadata em websites)
+# - 002_add_comment_kind.sql (tipo de comentário)
+
+# Alterações recentes
+# - Listagens de categorias e websites passam a mostrar sites com estado `approved` ou `active`
 ```
 
 ## 🚀 Deploy na Cloudflare
@@ -262,9 +269,11 @@ npm run db:migrate
    - **Functions directory:** o Pages deteta automaticamente `functions` na raiz do repositório (não é preciso apontar manualmente na UI atual; basta garantir que a pasta existe).
    - **Wrangler config path (opcional mas recomendado):** `apps/web/wrangler.toml`
 5. Bindings/Variáveis (definir por ambiente em Pages):
-   - D1: Binding `DB` associado à base `trono-db` (usa o mesmo ID do `wrangler.toml`)
-   - Vars: `ENVIRONMENT=production`; opcional `DEBUG_LOGS=true` para ativar logs de pedidos (default: desligado).
-   - Secrets: `JWT_SECRET` (obrigatório); `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` se usares OAuth.
+    - D1: Binding `DB` associado à base `trono-db` (usa o mesmo ID do `wrangler.toml`)
+    - R2: Binding `R2_BUCKET` para bucket `trono-assets` (ou o nome que definires no teu projeto).
+    - Vars: `ENVIRONMENT=production`; opcional `DEBUG_LOGS=true` para ativar logs de pedidos (default: desligado).
+    - Vars opcionais para ficheiros: `R2_PUBLIC_BASE_URL=https://<teu-dominio-de-assets>` para servir imagens por CDN pública. Se vazio, usa fallback por `/api/uploads/images/*`.
+    - Secrets: `JWT_SECRET` (obrigatório); `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` se usares OAuth.
 6. Rotas: a função está em `functions/api/[[path]].ts` (raiz do repo) e expõe `/api/*` (o frontend continua a chamar `/api` por defeito).
 7. Local: `cd apps/web && wrangler pages dev --local` (usa o `wrangler.toml` da pasta para ler bindings).
 
@@ -277,7 +286,7 @@ npm run db:migrate
 - Se precisares de depuração adicional da API, define `DEBUG_LOGS=true` nas variáveis (apenas para uso temporário).
 
 ### Próxima fase
-- Fase 4 — Contribuições (próxima a implementar: formulários de submissão de website/categoria, painel de contribuições, notificações de estado).
+- Fase 5 — Comparativos Diários (por iniciar: geração automática, página diária, votação, histórico e estatísticas).
 
 ## 🌱 Seed de dados rápido
 - Executa `npm run db:migrate` e depois `npm run db:seed` para popular categorias e exemplos.
