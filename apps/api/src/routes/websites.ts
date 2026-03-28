@@ -98,13 +98,12 @@ function normalizeWebsiteMetadata(input: unknown): string | null {
 
   const launchPrecision = data.launchPrecision;
   const allowedPrecisions: WebsiteMetadata['launch_precision'][] = ['exact', 'month', 'year', 'unknown'];
-  if (
-    typeof launchPrecision === 'string' &&
-    allowedPrecisions.includes(launchPrecision as WebsiteMetadata['launch_precision']) &&
-    // Store explicit "unknown" to reflect user choice even when a date isn't provided
-    (metadata.launch_date || launchPrecision === 'unknown')
-  ) {
-    metadata.launch_precision = launchPrecision as WebsiteMetadata['launch_precision'];
+  if (typeof launchPrecision === 'string' && allowedPrecisions.includes(launchPrecision as WebsiteMetadata['launch_precision'])) {
+    // Allow explicit "unknown" so the UI can reflect that the user intentionally could not provide a date.
+    // For all other precisions we only store them when a launch_date is present.
+    if (launchPrecision === 'unknown' || metadata.launch_date) {
+      metadata.launch_precision = launchPrecision as WebsiteMetadata['launch_precision'];
+    }
   }
 
   if (Array.isArray(data.languages)) {
