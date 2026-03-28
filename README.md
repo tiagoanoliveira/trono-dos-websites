@@ -162,7 +162,7 @@ CREATE TABLE category_suggestions (
 - [x] Formulário para propor novo website
 - [x] Formulário para sugerir nova categoria
 - [x] Painel de "minhas contribuições"
-- [ ] Notificações de estado (aprovado/rejeitado)
+- [x] Notificações de estado (aprovado/rejeitado)
 ### Fase 5 — Comparativos Diários
 - [ ] Geração automática de comparativos (Cron via Workers)
 - [ ] Página do comparativo do dia

@@ -8,14 +8,6 @@ import { useAuthStore } from '@/stores/authStore';
 import { ALLOWED_LANGUAGES } from '@/constants/languages';
 import { uploadImage } from '@/hooks/useImageUpload';
 
-type MySuggestion = {
-  id: string;
-  name: string;
-  description: string | null;
-  status: string;
-  created_at: string;
-};
-
 type MyWebsite = {
   id: string;
   name: string;
@@ -64,11 +56,11 @@ export function ProporWebsitePage() {
     sourceUrl: '',
     images: [''],
   });
-  const [categoryForm, setCategoryForm] = useState({ name: '', description: '' });
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
   const [uploadingMetaIndex, setUploadingMetaIndex] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState('');
+  const [websiteNotificationsOnly, setWebsiteNotificationsOnly] = useState(false);
 
   const categoryOptions = useMemo(() => {
     const options: { value: string; label: string }[] = [];
@@ -115,18 +107,6 @@ export function ProporWebsitePage() {
     },
   });
 
-  const submitCategory = useMutation({
-    mutationFn: async () => {
-      const res = await api.post<MySuggestion>('/categories/suggestions', categoryForm);
-      if (!res.success || !res.data) throw new Error(res.error?.message ?? 'Erro ao sugerir');
-      return res.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['my-category-suggestions'] });
-      setCategoryForm({ name: '', description: '' });
-    },
-  });
-
   const myWebsites = useQuery({
     queryKey: ['my-websites'],
     queryFn: async () => {
@@ -137,11 +117,13 @@ export function ProporWebsitePage() {
     enabled: isAuthenticated,
   });
 
-  const mySuggestions = useQuery({
-    queryKey: ['my-category-suggestions'],
+  const notifications = useQuery({
+    queryKey: ['notifications', 'mine'],
     queryFn: async () => {
-      const res = await api.get<MySuggestion[]>('/categories/suggestions/mine');
-      if (!res.success || !res.data) throw new Error(res.error?.message ?? 'Erro ao carregar');
+      const res = await api.get<Array<{ id: string; title: string; message: string; entity_type?: string | null }>>(
+        '/notifications/mine',
+      );
+      if (!res.success || !res.data) throw new Error(res.error?.message ?? 'Erro ao carregar notificações');
       return res.data;
     },
     enabled: isAuthenticated,
@@ -214,14 +196,7 @@ export function ProporWebsitePage() {
               />
             </div>
             <div>
-              <label className="label">Logo (URL)</label>
-              <input
-                className="input"
-                type="url"
-                placeholder="https://..."
-                value={form.logo_url}
-                onChange={(e) => setForm((f) => ({ ...f, logo_url: e.target.value }))}
-              />
+              <label className="label">Logo</label>
               <div className="mt-2">
                 <input
                   id="logo-upload"
@@ -247,17 +222,13 @@ export function ProporWebsitePage() {
                 <label htmlFor="logo-upload" className="btn-secondary cursor-pointer inline-flex">
                   {uploadingLogo ? 'A enviar logo…' : 'Carregar logo'}
                 </label>
+                {form.logo_url && (
+                  <img src={form.logo_url} alt="Pré-visualização do logo" className="mt-3 h-16 w-16 rounded-lg object-cover border border-throne-100" />
+                )}
               </div>
             </div>
             <div>
-              <label className="label">Screenshot (URL)</label>
-              <input
-                className="input"
-                type="url"
-                placeholder="https://..."
-                value={form.screenshot_url}
-                onChange={(e) => setForm((f) => ({ ...f, screenshot_url: e.target.value }))}
-              />
+              <label className="label">Screenshot</label>
               <div className="mt-2">
                 <input
                   id="screenshot-upload"
@@ -283,6 +254,13 @@ export function ProporWebsitePage() {
                 <label htmlFor="screenshot-upload" className="btn-secondary cursor-pointer inline-flex">
                   {uploadingScreenshot ? 'A enviar screenshot…' : 'Carregar screenshot'}
                 </label>
+                {form.screenshot_url && (
+                  <img
+                    src={form.screenshot_url}
+                    alt="Pré-visualização do screenshot"
+                    className="mt-3 w-full max-w-sm rounded-lg object-cover border border-throne-100"
+                  />
+                )}
               </div>
             </div>
             <div>
@@ -399,22 +377,9 @@ export function ProporWebsitePage() {
               </div>
             </div>
             <div className="space-y-2">
-              <label className="label">Fotos (URLs)</label>
+              <label className="label">Fotos</label>
               {metadata.images.map((img, idx) => (
                 <div key={idx} className="flex gap-2">
-                  <input
-                    className="input flex-1"
-                    placeholder="https://..."
-                    value={img}
-                    onChange={(e) =>
-                      setMetadata((m) => ({
-                        ...m,
-                        images: m.images.map((current, currentIdx) =>
-                          currentIdx === idx ? e.target.value : current,
-                        ),
-                      }))
-                    }
-                  />
                   {idx === metadata.images.length - 1 && (
                     <button
                       type="button"
@@ -456,6 +421,9 @@ export function ProporWebsitePage() {
                   >
                     {uploadingMetaIndex === idx ? 'A enviar…' : 'Upload'}
                   </label>
+                  {img && (
+                    <img src={img} alt={`Pré-visualização ${idx + 1}`} className="h-16 w-16 rounded object-cover border border-throne-100" />
+                  )}
                 </div>
               ))}
             </div>
@@ -499,54 +467,6 @@ export function ProporWebsitePage() {
           </form>
         </div>
 
-        <div className="card p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-throne-900">Sugerir categoria</h2>
-            <Badge variant="info">Ajuda a organizar</Badge>
-          </div>
-          <form
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              submitCategory.mutate();
-            }}
-          >
-            <div>
-              <label className="label">Nome</label>
-              <input
-                className="input"
-                value={categoryForm.name}
-                onChange={(e) => setCategoryForm((f) => ({ ...f, name: e.target.value }))}
-                required
-              />
-            </div>
-            <div>
-              <label className="label">Descrição (opcional)</label>
-              <textarea
-                className="input min-h-[96px]"
-                value={categoryForm.description}
-                onChange={(e) => setCategoryForm((f) => ({ ...f, description: e.target.value }))}
-              />
-            </div>
-            {submitCategory.error && (
-              <p className="text-sm text-red-600">
-                {(submitCategory.error as Error).message || 'Erro ao sugerir'}
-              </p>
-            )}
-            {submitCategory.isSuccess && (
-              <p className="text-sm text-green-700 bg-green-50 border border-green-200 px-3 py-2 rounded-lg">
-                Sugestão enviada! Vamos analisar e avisar-te.
-              </p>
-            )}
-            <button
-              type="submit"
-              className="btn-secondary w-full justify-center"
-              disabled={submitCategory.isPending}
-            >
-              {submitCategory.isPending ? 'A enviar…' : 'Sugerir categoria'}
-            </button>
-          </form>
-        </div>
       </div>
 
       <div className="card p-6 space-y-4">
@@ -580,30 +500,34 @@ export function ProporWebsitePage() {
               ))}
             </div>
           </div>
-          <div>
-            <h4 className="text-sm font-semibold text-throne-700 mb-2">Sugestões de categoria</h4>
-            <div className="space-y-2">
-              {mySuggestions.isLoading && <p className="text-sm text-throne-500">A carregar…</p>}
-              {mySuggestions.data?.length === 0 && (
-                <p className="text-sm text-throne-500">Ainda não sugeriste categorias.</p>
-              )}
-              {mySuggestions.data?.map((sug) => (
-                <div
-                  key={sug.id}
-                  className="flex items-center justify-between rounded-lg border border-throne-100 bg-throne-50 px-3 py-2"
-                >
-                  <div>
-                    <p className="font-medium text-throne-900 leading-tight">{sug.name}</p>
-                    {sug.description ? (
-                      <p className="text-xs text-throne-500 line-clamp-2">{sug.description}</p>
-                    ) : null}
-                  </div>
-                  <StatusBadge status={sug.status} />
-                </div>
-              ))}
-            </div>
+          <div className="flex items-center justify-center">
+            <Link to="/propor-categoria" className="btn-secondary">
+              Sugerir categoria (página separada)
+            </Link>
           </div>
         </div>
+      </div>
+      <div className="card p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-throne-900">Notificações</h3>
+          <label className="text-sm text-throne-600 flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={websiteNotificationsOnly}
+              onChange={(e) => setWebsiteNotificationsOnly(e.target.checked)}
+            />
+            Só websites
+          </label>
+        </div>
+        {notifications.isLoading && <p className="text-sm text-throne-500">A carregar…</p>}
+        {notifications.data
+          ?.filter((n) => (websiteNotificationsOnly ? n.entity_type === 'website' : true))
+          .map((n) => (
+            <div key={n.id} className="rounded-lg border border-throne-100 bg-throne-50 px-3 py-2">
+              <p className="font-medium text-throne-900">{n.title}</p>
+              <p className="text-sm text-throne-600">{n.message}</p>
+            </div>
+          ))}
       </div>
     </div>
   );

@@ -25,7 +25,7 @@ export function Header() {
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 font-display text-xl font-bold">
             <span className="text-2xl">👑</span>
-            <span className="hidden sm:inline">
+            <span className="inline">
               <span className="text-throne-900">Trono dos</span>{' '}
               <span className="text-crown-500">Websites</span>
             </span>
@@ -53,6 +53,9 @@ export function Header() {
             <Link to="/propor" className="btn-primary hidden sm:inline-flex">
               <PlusIcon className="h-4 w-4" />
               Propor Website
+            </Link>
+            <Link to="/propor-categoria" className="btn-secondary hidden sm:inline-flex">
+              Propor Categoria
             </Link>
 
             {/* Mobile menu button */}
@@ -139,6 +142,9 @@ export function Header() {
             <Link to="/propor" className="btn-primary justify-center">
               <PlusIcon className="h-4 w-4" />
               Propor Website
+            </Link>
+            <Link to="/propor-categoria" className="btn-secondary justify-center">
+              Propor Categoria
             </Link>
             {isAuthenticated && user ? (
               <>

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
 import { Badge } from '@/components/ui/Badge';
 import { cn, getInitials } from '@/lib/utils';
 import { uploadImage } from '@/hooks/useImageUpload';
+import { api } from '@/lib/api';
 
 export function ProfilePage() {
   const { user, updateProfile, logout, isAuthenticated } = useAuthStore();
@@ -15,19 +17,22 @@ export function ProfilePage() {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const navigate = useNavigate();
 
-  const isValidAvatarUrl = (value: string) => {
-    try {
-      new URL(value);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
   useEffect(() => {
     setName(user?.name ?? '');
     setAvatar(user?.avatar_url ?? '');
   }, [user]);
+
+  const notifications = useQuery({
+    queryKey: ['notifications', 'mine'],
+    queryFn: async () => {
+      const res = await api.get<Array<{ id: string; title: string; message: string; is_read: boolean; created_at: string }>>(
+        '/notifications/mine',
+      );
+      if (!res.success || !res.data) throw new Error(res.error?.message ?? 'Erro ao carregar notificações');
+      return res.data;
+    },
+    enabled: isAuthenticated,
+  });
 
   if (!isAuthenticated || !user) {
     return (
@@ -55,10 +60,6 @@ export function ProfilePage() {
     setError('');
     if (!name.trim()) {
       setError('O nome é obrigatório');
-      return;
-    }
-    if (avatar && !isValidAvatarUrl(avatar)) {
-      setError('URL de avatar inválida');
       return;
     }
     setIsSaving(true);
@@ -114,14 +115,7 @@ export function ProfilePage() {
                 />
               </div>
               <div>
-                <label className="label">Avatar (URL opcional)</label>
-                <input
-                  type="url"
-                  value={avatar}
-                  onChange={(e) => setAvatar(e.target.value)}
-                  className="input"
-                  placeholder="https://..."
-                />
+                <label className="label">Avatar</label>
                 <div className="mt-2 flex items-center gap-2">
                   <input
                     type="file"
@@ -150,6 +144,13 @@ export function ProfilePage() {
                     {isUploadingAvatar ? 'A enviar…' : 'Carregar avatar'}
                   </label>
                 </div>
+                {avatar && (
+                  <img
+                    src={avatar}
+                    alt="Pré-visualização do avatar"
+                    className="mt-3 h-20 w-20 rounded-full object-cover border border-throne-200"
+                  />
+                )}
                 <p className="text-xs text-throne-400 mt-1">Se vazio, usamos uma letra do teu nome.</p>
               </div>
               <div>
@@ -205,6 +206,21 @@ export function ProfilePage() {
                 Recuperar/alterar password
               </Link>
             </div>
+          </div>
+        </div>
+        <div className="card p-6 space-y-3">
+          <h2 className="text-lg font-semibold text-throne-800">Notificações</h2>
+          {notifications.isLoading && <p className="text-sm text-throne-500">A carregar…</p>}
+          {notifications.data?.length === 0 && (
+            <p className="text-sm text-throne-500">Ainda não tens notificações.</p>
+          )}
+          <div className="space-y-2">
+            {notifications.data?.map((item) => (
+              <div key={item.id} className="rounded-lg border border-throne-100 bg-throne-50 px-3 py-2">
+                <p className="text-sm font-semibold text-throne-900">{item.title}</p>
+                <p className="text-sm text-throne-600">{item.message}</p>
+              </div>
+            ))}
           </div>
         </div>
       </div>

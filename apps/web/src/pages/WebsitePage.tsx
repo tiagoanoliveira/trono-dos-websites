@@ -122,9 +122,9 @@ export function WebsitePage() {
 
         {/* Header card */}
         <div className="card p-6 sm:p-8">
-          <div className="flex flex-col sm:flex-row items-start gap-6">
+          <div className="flex items-start gap-4 sm:gap-6">
             {/* Logo */}
-            <div className="shrink-0">
+            <div className="shrink-0 space-y-3">
               {website.logo_url ? (
                 <img
                   src={website.logo_url}
@@ -136,6 +136,35 @@ export function WebsitePage() {
                   {getInitials(website.name)}
                 </div>
               )}
+              <div className="flex items-center justify-center gap-2 rounded-full border border-throne-200 bg-throne-50 px-2 py-1">
+                <button
+                  className={cn(
+                    'inline-flex h-8 w-8 items-center justify-center rounded-full border border-throne-200 bg-white',
+                    userVote === 1 && 'border-crown-500 text-crown-700',
+                    voteMutation.isPending && 'opacity-60 cursor-not-allowed',
+                  )}
+                  onClick={() => (isAuthenticated ? voteMutation.mutate(userVote === 1 ? 0 : 1) : navigate('/entrar'))}
+                  disabled={voteMutation.isPending}
+                  aria-label="Upvote"
+                >
+                  ▲
+                </button>
+                <span className="min-w-12 text-center text-sm font-semibold text-throne-900">{website.score ?? 0}</span>
+                <button
+                  className={cn(
+                    'inline-flex h-8 w-8 items-center justify-center rounded-full border border-throne-200 bg-white',
+                    userVote === -1 && 'border-red-200 text-red-700',
+                    voteMutation.isPending && 'opacity-60 cursor-not-allowed',
+                  )}
+                  onClick={() =>
+                    isAuthenticated ? voteMutation.mutate(userVote === -1 ? 0 : -1) : navigate('/entrar')
+                  }
+                  disabled={voteMutation.isPending}
+                  aria-label="Downvote"
+                >
+                  ▼
+                </button>
+              </div>
             </div>
 
             {/* Info */}
@@ -166,51 +195,11 @@ export function WebsitePage() {
                 <p className="text-throne-600 leading-relaxed">{website.description}</p>
               )}
 
-              {/* Score & quick vote */}
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="inline-flex items-center gap-2 rounded-full bg-throne-50 px-3 py-2 text-sm text-throne-700">
-                  <span className="font-semibold text-throne-900">{website.score ?? 0}</span>
-                  {canSeeBreakdown && (
-                    <span className="text-throne-400">
-                      {website.upvotes ?? 0} ↑ · {website.downvotes ?? 0} ↓
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    className={cn(
-                      'btn-secondary h-9 px-3',
-                      userVote === 1 && 'border-crown-500 text-crown-700',
-                      voteMutation.isPending && 'opacity-60 cursor-not-allowed',
-                    )}
-                    onClick={() => (isAuthenticated ? voteMutation.mutate(userVote === 1 ? 0 : 1) : navigate('/entrar'))}
-                    disabled={voteMutation.isPending}
-                  >
-                    ▲ Up
-                  </button>
-                  <button
-                    className={cn(
-                      'btn-secondary h-9 px-3',
-                      userVote === -1 && 'border-red-200 text-red-700',
-                      voteMutation.isPending && 'opacity-60 cursor-not-allowed',
-                    )}
-                    onClick={() =>
-                      isAuthenticated ? voteMutation.mutate(userVote === -1 ? 0 : -1) : navigate('/entrar')
-                    }
-                    disabled={voteMutation.isPending}
-                  >
-                    ▼ Down
-                  </button>
-                  {!isAuthenticated && (
-                    <button className="text-sm text-crown-600 hover:text-crown-700" onClick={() => navigate('/entrar')}>
-                      Entrar para votar
-                    </button>
-                  )}
-                </div>
-                {isAuthenticated && userVote === 0 && (
-                  <p className="text-xs text-throne-500">Ainda não votaste. Escolhe ↑ ou ↓ para ajudar a comunidade.</p>
-                )}
-              </div>
+              {!isAuthenticated && (
+                <button className="text-sm text-crown-600 hover:text-crown-700" onClick={() => navigate('/entrar')}>
+                  Entrar para votar
+                </button>
+              )}
 
               {/* Meta */}
               <div className="flex items-center gap-4 text-sm text-throne-400 flex-wrap">
@@ -375,6 +364,7 @@ function CommentsSection({
   canSeeBreakdown: boolean;
 }) {
   const [content, setContent] = useState('');
+  const [kind, setKind] = useState('opinion');
   const [formError, setFormError] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -385,8 +375,9 @@ function CommentsSection({
       return;
     }
     try {
-      await onSubmit({ content: content.trim(), kind: 'general' });
+      await onSubmit({ content: content.trim(), kind });
       setContent('');
+      setKind('opinion');
       const el = textareaRef.current;
       if (el) {
         el.style.height = 'auto';
@@ -456,6 +447,13 @@ function CommentsSection({
               maxLength={1000}
             />
             <div className="flex items-center justify-between gap-3 border-t border-throne-100 px-3 py-1.5">
+              <select className="input h-8 w-36 text-xs" value={kind} onChange={(e) => setKind(e.target.value)}>
+                <option value="opinion">Opinião</option>
+                <option value="suggestion">Sugestão</option>
+                <option value="issue">Erro/bug</option>
+                <option value="praise">Elogio</option>
+                <option value="other">Outro</option>
+              </select>
               <span className="text-[11px] text-throne-400">{content.length}/1000</span>
               <button
                 className={cn('btn-primary h-8 px-3 text-sm', isSubmitting && 'opacity-60 cursor-not-allowed')}

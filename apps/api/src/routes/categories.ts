@@ -3,6 +3,7 @@ import type { Env } from '../index';
 import { createSuccess, createError, generateId, getPaginationParams, buildPaginationMeta } from '../utils/helpers';
 import { requireAuth, type AuthContext } from '../middleware/auth';
 import { MIN_NAME_LENGTH } from '../utils/validation';
+import { notifyStatusChange } from '../services/notifications';
 
 type CategoryRow = {
   id: string;
@@ -235,5 +236,62 @@ categoriesRouter.get('/:slug', async (c) => {
   } catch (err) {
     console.error('[categories GET /:slug]', err);
     return c.json(createError('INTERNAL_ERROR', 'Failed to fetch category'), 500);
+  }
+});
+
+categoriesRouter.patch('/suggestions/:id/status', requireAuth, async (c) => {
+  try {
+    const role = c.get('userRole');
+    if (role !== 'admin' && role !== 'moderator') {
+      return c.json(createError('FORBIDDEN', 'Sem permissões para moderar'), 403);
+    }
+
+    const { id } = c.req.param();
+    let body: { status?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
+    }
+
+    const status = body.status;
+    if (status !== 'approved' && status !== 'rejected') {
+      return c.json(createError('VALIDATION_ERROR', 'Estado inválido'), 400);
+    }
+
+    const suggestion = await c.env.DB.prepare(
+      `SELECT cs.id, cs.name, cs.suggested_by, u.email
+       FROM category_suggestions cs
+       LEFT JOIN users u ON u.id = cs.suggested_by
+       WHERE cs.id = ?`,
+    )
+      .bind(id)
+      .first<{ id: string; name: string; suggested_by: string | null; email: string | null }>();
+
+    if (!suggestion) {
+      return c.json(createError('NOT_FOUND', 'Sugestão não encontrada'), 404);
+    }
+
+    await c.env.DB.prepare(
+      'UPDATE category_suggestions SET status = ?, reviewed_by = ? WHERE id = ?',
+    )
+      .bind(status, c.get('userId'), id)
+      .run();
+
+    if (suggestion.suggested_by && suggestion.email) {
+      await notifyStatusChange(c.env, {
+        userId: suggestion.suggested_by,
+        email: suggestion.email,
+        kind: 'category',
+        entityId: suggestion.id,
+        name: suggestion.name,
+        status,
+      });
+    }
+
+    return c.json(createSuccess({ id, status }));
+  } catch (err) {
+    console.error('[categories PATCH /suggestions/:id/status]', err);
+    return c.json(createError('INTERNAL_ERROR', 'Não foi possível atualizar estado da sugestão'), 500);
   }
 });

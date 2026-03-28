@@ -3,6 +3,8 @@ import type { Env } from '../index';
 import { createSuccess, createError, getPaginationParams, buildPaginationMeta, generateId } from '../utils/helpers';
 import { optionalAuth, requireAuth, type AuthContext } from '../middleware/auth';
 import { MIN_NAME_LENGTH, normalizeUrl } from '../utils/validation';
+import { isAllowedUploadUrl } from '../utils/uploadUrl';
+import { notifyStatusChange } from '../services/notifications';
 
 type WebsiteRow = {
   id: string;
@@ -306,12 +308,21 @@ websitesRouter.post('/', requireAuth, async (c) => {
       if (typeof value !== 'string') {
         throw new Error(`${field} inválido`);
       }
+      const trimmed = value.trim();
+      if (trimmed.startsWith('/api/uploads/images/')) {
+        if (!isAllowedUploadUrl(trimmed, c.env)) throw new Error(`${field} inválido`);
+        return trimmed;
+      }
       try {
-        const parsed = new URL(value);
+        const parsed = new URL(trimmed);
         if (!['http:', 'https:'].includes(parsed.protocol)) {
           throw new Error(`${field} inválido`);
         }
-        return parsed.toString();
+        const normalized = parsed.toString();
+        if (!isAllowedUploadUrl(normalized, c.env)) {
+          throw new Error(`${field} inválido`);
+        }
+        return normalized;
       } catch {
         throw new Error(`${field} inválido`);
       }
@@ -344,6 +355,19 @@ websitesRouter.post('/', requireAuth, async (c) => {
             ),
             400,
           );
+        }
+      }
+    }
+
+    if (metadata && typeof metadata === 'object' && 'images' in (metadata as Record<string, unknown>)) {
+      const images = (metadata as { images?: unknown }).images;
+      if (images !== undefined) {
+        if (!Array.isArray(images) || !images.every((img) => typeof img === 'string')) {
+          return c.json(createError('VALIDATION_ERROR', 'Imagens devem ser uma lista de strings'), 400);
+        }
+        const invalid = (images as string[]).filter((img) => !isAllowedUploadUrl(img, c.env));
+        if (invalid.length > 0) {
+          return c.json(createError('VALIDATION_ERROR', 'Imagens devem ser enviadas por upload R2'), 400);
         }
       }
     }
@@ -1089,5 +1113,60 @@ websitesRouter.post('/comments/:commentId/votes', requireAuth, async (c) => {
   } catch (err) {
     console.error('[comments POST /comments/:commentId/votes]', err);
     return c.json(createError('INTERNAL_ERROR', 'Não foi possível registar o voto'), 500);
+  }
+});
+
+websitesRouter.patch('/:id/status', requireAuth, async (c) => {
+  try {
+    const role = c.get('userRole');
+    if (role !== 'admin' && role !== 'moderator') {
+      return c.json(createError('FORBIDDEN', 'Sem permissões para moderar'), 403);
+    }
+
+    const { id } = c.req.param();
+    let body: { status?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
+    }
+
+    const status = body.status;
+    if (status !== 'approved' && status !== 'rejected') {
+      return c.json(createError('VALIDATION_ERROR', 'Estado inválido'), 400);
+    }
+
+    const website = await c.env.DB.prepare(
+      `SELECT w.id, w.name, w.submitted_by, u.email
+       FROM websites w
+       LEFT JOIN users u ON u.id = w.submitted_by
+       WHERE w.id = ?`,
+    )
+      .bind(id)
+      .first<{ id: string; name: string; submitted_by: string | null; email: string | null }>();
+
+    if (!website) {
+      return c.json(createError('NOT_FOUND', 'Website não encontrado'), 404);
+    }
+
+    await c.env.DB.prepare('UPDATE websites SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .bind(status, id)
+      .run();
+
+    if (website.submitted_by && website.email) {
+      await notifyStatusChange(c.env, {
+        userId: website.submitted_by,
+        email: website.email,
+        kind: 'website',
+        entityId: website.id,
+        name: website.name,
+        status,
+      });
+    }
+
+    return c.json(createSuccess({ id, status }));
+  } catch (err) {
+    console.error('[websites PATCH /:id/status]', err);
+    return c.json(createError('INTERNAL_ERROR', 'Não foi possível atualizar estado'), 500);
   }
 });
