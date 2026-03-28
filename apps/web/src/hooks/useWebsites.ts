@@ -28,7 +28,31 @@ export function useWebsites(filters: WebsiteFilters = {}) {
       if (!response.success) {
         throw new Error(response.error?.message || 'Erro ao carregar websites');
       }
-      return response.data!;
+      // API pode responder em dois formatos:
+      // 1) { success, data: { data: Website[], meta } }
+      // 2) { success, data: Website[], meta }
+      const raw = response.data;
+      if (raw && !Array.isArray(raw) && 'data' in raw && 'meta' in raw) {
+        return raw as PaginatedResponse<Website>;
+      }
+
+      const page = filters.page ?? 1;
+      const perPage = filters.perPage ?? 20;
+      const dataArray = Array.isArray(raw) ? raw : [];
+      const meta =
+        response.meta ?? {
+          total: dataArray.length,
+          page,
+          perPage,
+          totalPages: Math.max(1, Math.ceil((response.meta?.total ?? dataArray.length) / perPage)),
+          hasNextPage: false,
+          hasPrevPage: page > 1,
+        };
+
+      return {
+        data: dataArray,
+        meta,
+      };
     },
   });
 
