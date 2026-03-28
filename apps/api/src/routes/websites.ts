@@ -376,6 +376,17 @@ websitesRouter.get('/', async (c) => {
     const sort: SortOption = isValidSort(sortParam) ? sortParam : 'recent';
     const orderClause = SORT_MAP[sort];
 
+    if (c.env.DEBUG_LOGS === 'true') {
+      console.log('[websites] list request', {
+        categoryId,
+        includeDescendants,
+        search,
+        sort,
+        page,
+        perPage,
+      });
+    }
+
     const conditions: string[] = [VISIBLE_STATUS_CONDITION];
     const bindings: (string | number)[] = [];
 
@@ -383,6 +394,10 @@ websitesRouter.get('/', async (c) => {
       const categoryIds = includeDescendants
         ? await collectCategoryIdsWithDescendants(c.env.DB, categoryId)
         : [categoryId];
+
+      if (c.env.DEBUG_LOGS === 'true') {
+        console.log('[websites] category filter', { categoryId, resolved: categoryIds });
+      }
 
       if (categoryIds.length > 1) {
         conditions.push(`w.category_id IN (${categoryIds.map(() => '?').join(',')})`);
@@ -454,6 +469,15 @@ websitesRouter.get('/', async (c) => {
       metadata: parseMetadata(row.metadata),
       owner_name: row.owner_name ?? null,
     }));
+
+    if (c.env.DEBUG_LOGS === 'true') {
+      console.log('[websites] list result', {
+        total,
+        returned: data.length,
+        page,
+        perPage,
+      });
+    }
 
     return c.json(createSuccess(data, meta));
   } catch (err) {
@@ -531,7 +555,18 @@ websitesRouter.get('/:id', optionalAuth, async (c) => {
     }
 
     if (!website) {
+      if (c.env.DEBUG_LOGS === 'true') {
+        console.log('[websites] detail not found', { id });
+      }
       return c.json(createError('NOT_FOUND', `Website '${id}' not found`), 404);
+    }
+
+    if (c.env.DEBUG_LOGS === 'true') {
+      console.log('[websites] detail result', {
+        id: website.id,
+        category_id: website.category_id,
+        status: website.status,
+      });
     }
 
     return c.json(

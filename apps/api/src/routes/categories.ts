@@ -106,15 +106,17 @@ categoriesRouter.get('/suggestions/mine', requireAuth, async (c) => {
   }
 });
 
-type SerializedCategory = Omit<CategoryRow, 'parent_id'> & { children: SerializedCategory[] };
+type SerializedCategory = Omit<CategoryRow, 'website_count'> & {
+  website_count: number;
+  children: SerializedCategory[];
+};
 
 function serializeCategory(node: CategoryNode): SerializedCategory {
   const serializedChildren = node.children.map(serializeCategory);
   const childrenTotal = serializedChildren.reduce((sum, child) => sum + child.website_count, 0);
-  const { parent_id: _omit, ...rest } = node;
 
   return {
-    ...rest,
+    ...node,
     website_count: node.website_count + childrenTotal,
     children: serializedChildren,
   };
@@ -150,6 +152,10 @@ categoriesRouter.get('/', async (c) => {
     const { searchParams } = new URL(c.req.url);
     const parentIdFilter = searchParams.get('parent_id');
 
+    if (c.env.DEBUG_LOGS === 'true') {
+      console.log('[categories] list request', { parentIdFilter });
+    }
+
     const rows = await c.env.DB.prepare(
       `SELECT
          c.id, c.name, c.slug, c.description, c.icon, c.parent_id, c.status, c.created_at,
@@ -165,6 +171,13 @@ categoriesRouter.get('/', async (c) => {
       .then((r) => r.results);
 
     const { roots, nodes } = buildCategoryTree(rows);
+    if (c.env.DEBUG_LOGS === 'true') {
+      console.log('[categories] list result', {
+        total: rows.length,
+        roots: roots.length,
+        withParentFilter: parentIdFilter,
+      });
+    }
 
     if (parentIdFilter !== null) {
       const children = Array.from(nodes.values()).filter((node) => node.parent_id === parentIdFilter);
@@ -181,6 +194,9 @@ categoriesRouter.get('/', async (c) => {
 categoriesRouter.get('/:slug', async (c) => {
   try {
     const { slug } = c.req.param();
+    if (c.env.DEBUG_LOGS === 'true') {
+      console.log('[categories] detail request', { slug });
+    }
 
     const rows = await c.env.DB.prepare(
       `SELECT
@@ -199,11 +215,22 @@ categoriesRouter.get('/:slug', async (c) => {
     const node = slugMap.get(slug);
 
     if (!node) {
+      if (c.env.DEBUG_LOGS === 'true') {
+        console.log('[categories] detail not found', { slug });
+      }
       return c.json(createError('NOT_FOUND', `Category '${slug}' not found`), 404);
     }
 
     // If the node is not a root, ensure its subtree is still fully serialized
     const serialized = serializeCategory(node);
+    if (c.env.DEBUG_LOGS === 'true') {
+      console.log('[categories] detail result', {
+        slug,
+        id: serialized.id,
+        parent_id: serialized.parent_id,
+        children: serialized.children.length,
+      });
+    }
     return c.json(createSuccess(serialized));
   } catch (err) {
     console.error('[categories GET /:slug]', err);

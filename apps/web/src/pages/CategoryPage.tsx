@@ -4,11 +4,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn, truncate } from '@/lib/utils';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { useCategoryBySlug } from '@/hooks/useCategories';
+import { useCategories, useCategoryBySlug } from '@/hooks/useCategories';
 import { useWebsites, type WebsiteFilters } from '@/hooks/useWebsites';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
-import type { PaginatedResponse, Website } from '@/types';
+import type { Category, PaginatedResponse, Website } from '@/types';
 
 type SortOption = 'rating' | 'date' | 'popularity' | 'featured';
 
@@ -20,12 +20,16 @@ const sortOptions: { value: SortOption; label: string }[] = [
 ];
 
 export function CategoryPage() {
-  const { slug = '' } = useParams<{ slug: string }>();
+  const params = useParams<{ '*': string }>();
+  const slugPath = params['*'] ?? '';
+  const slugSegments = slugPath.split('/').filter(Boolean);
+  const slug = slugSegments[slugSegments.length - 1] ?? '';
   const [sort, setSort] = useState<SortOption>('rating');
   const [page, setPage] = useState(1);
   const { isAuthenticated } = useAuthStore();
   const queryClient = useQueryClient();
 
+  const { categories, isLoading: categoriesLoading } = useCategories();
   const { category, isLoading: categoryLoading, error: categoryError } = useCategoryBySlug(slug);
 
   const filters: WebsiteFilters = useMemo(
@@ -76,7 +80,37 @@ export function CategoryPage() {
     },
   });
 
-  if (categoryLoading) {
+  const { breadcrumbChain, currentPathSlugs } = useMemo(() => {
+    const idMap = new Map<string, Category>();
+    const walk = (cat: Category) => {
+      idMap.set(cat.id, cat);
+      cat.children?.forEach(walk);
+    };
+    categories.forEach(walk);
+
+    if (!category) {
+      return { breadcrumbChain: [] as Category[], currentPathSlugs: [] as string[] };
+    }
+
+    const chain: Category[] = [];
+    let cursor: Category | undefined = category;
+    while (cursor) {
+      chain.push(cursor);
+      if (cursor.parent_id && idMap.has(cursor.parent_id)) {
+        cursor = idMap.get(cursor.parent_id);
+      } else {
+        break;
+      }
+    }
+
+    const fullChain = chain.reverse();
+    return {
+      breadcrumbChain: fullChain,
+      currentPathSlugs: fullChain.map((c) => c.slug),
+    };
+  }, [categories, category]);
+
+  if (categoryLoading || categoriesLoading) {
     return (
       <div className="container-app flex items-center justify-center py-32">
         <Spinner size="lg" className="text-crown-500" />
@@ -110,7 +144,25 @@ export function CategoryPage() {
             Início
           </Link>
           <ChevronIcon className="h-4 w-4" />
-          <span className="text-throne-900 font-medium">{category.name}</span>
+          {breadcrumbChain.map((crumb, idx) => {
+            const isLast = idx === breadcrumbChain.length - 1;
+            const path = `/categoria/${breadcrumbChain
+              .slice(0, idx + 1)
+              .map((c) => c.slug)
+              .join('/')}`;
+            return (
+              <div key={crumb.id} className="flex items-center gap-2">
+                {isLast ? (
+                  <span className="text-throne-900 font-medium">{crumb.name}</span>
+                ) : (
+                  <Link to={path} className="hover:text-crown-600 transition-colors">
+                    {crumb.name}
+                  </Link>
+                )}
+                {!isLast && <ChevronIcon className="h-4 w-4" />}
+              </div>
+            );
+          })}
         </nav>
 
         {/* Category header */}
@@ -143,7 +195,7 @@ export function CategoryPage() {
               {category.children.map((child) => (
                 <Link
                   key={child.id}
-                  to={`/categoria/${child.slug}`}
+                  to={`/categoria/${[...currentPathSlugs, child.slug].join('/')}`}
                   className={cn(
                     'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium',
                     'bg-throne-100 text-throne-700 hover:bg-crown-100 hover:text-crown-700',
