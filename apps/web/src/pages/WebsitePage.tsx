@@ -376,22 +376,21 @@ function CommentsSection({
 }) {
   const [content, setContent] = useState('');
   const [formError, setFormError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
-  const [kind, setKind] = useState('opinion');
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const handleSubmit = async () => {
     setFormError('');
-    setSuccessMsg('');
     if (!content.trim()) {
       setFormError('Escreve um comentário primeiro.');
       return;
     }
     try {
-      await onSubmit({ content: content.trim(), kind });
+      await onSubmit({ content: content.trim(), kind: 'general' });
       setContent('');
-      setKind('opinion');
-      setSuccessMsg('Comentário publicado!');
+      const el = textareaRef.current;
+      if (el) {
+        el.style.height = 'auto';
+      }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Não foi possível publicar o comentário.');
     }
@@ -409,65 +408,6 @@ function CommentsSection({
           </p>
         </div>
       </div>
-
-      {isAuthenticated ? (
-        <div className="space-y-2">
-          <label className="label">Partilha a tua opinião</label>
-          <div className="rounded-xl border border-throne-200 bg-white shadow-sm">
-            <textarea
-              ref={textareaRef}
-              className="input min-h-[48px] border-none focus:ring-0 resize-none"
-              placeholder="Escreve algo útil para a comunidade..."
-              value={content}
-              onChange={(e) => {
-                setContent(e.target.value);
-                const el = textareaRef.current;
-                if (el) {
-                  el.style.height = 'auto';
-                  el.style.height = `${el.scrollHeight}px`;
-                }
-              }}
-              maxLength={1000}
-            />
-            <div className="flex items-center justify-between gap-3 border-t border-throne-100 px-3 py-2 flex-wrap">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-throne-500">Tag:</span>
-                <select
-                  className="input h-9 w-36"
-                  value={kind}
-                  onChange={(e) => setKind(e.target.value)}
-                >
-                  <option value="opinion">Opinião</option>
-                  <option value="suggestion">Sugestão</option>
-                  <option value="issue">Erro/bug</option>
-                  <option value="praise">Elogio</option>
-                  <option value="other">Outro</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-throne-400">{content.length}/1000</span>
-                <button
-                  className={cn('btn-primary', isSubmitting && 'opacity-60 cursor-not-allowed')}
-                  onClick={handleSubmit}
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? 'A enviar…' : 'Publicar comentário'}
-                </button>
-              </div>
-            </div>
-          </div>
-          {formError && <p className="text-sm text-red-600">{formError}</p>}
-          {errorMessage && !formError && <p className="text-sm text-red-600">{errorMessage}</p>}
-          {successMsg && <p className="text-sm text-green-600">{successMsg}</p>}
-        </div>
-      ) : (
-        <div className="flex items-center gap-3 text-sm text-throne-600">
-          <span>Inicia sessão para participar na conversa.</span>
-          <button className="btn-secondary px-3 py-1" onClick={onLogin}>
-            Entrar
-          </button>
-        </div>
-      )}
 
       <div className="border-t border-throne-100 pt-4 space-y-4">
         {isLoading ? (
@@ -496,6 +436,47 @@ function CommentsSection({
           ))
         )}
       </div>
+
+      {isAuthenticated ? (
+        <div className="space-y-1 border-t border-throne-100 pt-3">
+          <div className="rounded-xl border border-throne-200 bg-white">
+            <textarea
+              ref={textareaRef}
+              className="input min-h-[36px] border-none focus:ring-0 resize-none py-2 text-sm"
+              placeholder="Escrever comentário..."
+              value={content}
+              onChange={(e) => {
+                setContent(e.target.value);
+                const el = textareaRef.current;
+                if (el) {
+                  el.style.height = 'auto';
+                  el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+                }
+              }}
+              maxLength={1000}
+            />
+            <div className="flex items-center justify-between gap-3 border-t border-throne-100 px-3 py-1.5">
+              <span className="text-[11px] text-throne-400">{content.length}/1000</span>
+              <button
+                className={cn('btn-primary h-8 px-3 text-sm', isSubmitting && 'opacity-60 cursor-not-allowed')}
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'A enviar…' : 'Enviar'}
+              </button>
+            </div>
+          </div>
+          {formError && <p className="text-sm text-red-600">{formError}</p>}
+          {errorMessage && !formError && <p className="text-sm text-red-600">{errorMessage}</p>}
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 text-sm text-throne-600 border-t border-throne-100 pt-3">
+          <span>Inicia sessão para participar na conversa.</span>
+          <button className="btn-secondary px-3 py-1" onClick={onLogin}>
+            Entrar
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -605,14 +586,14 @@ function CommentItem({
             <div className="mt-2 space-y-2">
               <textarea
                 ref={replyRef}
-                className="input min-h-[48px] resize-none"
+                className="input min-h-[36px] resize-none py-2 text-sm"
                 value={replyText}
                 onChange={(e) => {
                   setReplyText(e.target.value);
                   const el = replyRef.current;
                   if (el) {
                     el.style.height = 'auto';
-                    el.style.height = `${el.scrollHeight}px`;
+                    el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
                   }
                 }}
                 placeholder="Responder a este comentário..."

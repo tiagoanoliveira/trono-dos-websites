@@ -4,15 +4,18 @@ import { categoriesRouter } from './routes/categories';
 import { websitesRouter } from './routes/websites';
 import { ideasRouter } from './routes/ideas';
 import { authRouter } from './routes/auth';
+import { uploadsRouter } from './routes/uploads';
 import { createError } from './utils/helpers';
 
 export type Env = {
   DB: D1Database;
+  R2_BUCKET?: R2Bucket;
   JWT_SECRET: string;
   ENVIRONMENT: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   DEBUG_LOGS?: string; // set to "true" to log requests
+  R2_PUBLIC_BASE_URL?: string;
 };
 
 const app = new Hono<{ Bindings: Env }>();
@@ -46,6 +49,7 @@ app.get('/api/health', (c) => {
 });
 
 app.route('/api/auth', authRouter);
+app.route('/api/uploads', uploadsRouter);
 app.route('/api/categories', categoriesRouter);
 app.route('/api/websites', websitesRouter);
 app.route('/api/ideas', ideasRouter);

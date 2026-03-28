@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { Badge } from '@/components/ui/Badge';
 import { cn, getInitials } from '@/lib/utils';
+import { uploadImage } from '@/hooks/useImageUpload';
 
 export function ProfilePage() {
   const { user, updateProfile, logout, isAuthenticated } = useAuthStore();
@@ -11,6 +12,7 @@ export function ProfilePage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const navigate = useNavigate();
 
   const isValidAvatarUrl = (value: string) => {
@@ -116,10 +118,38 @@ export function ProfilePage() {
                 <input
                   type="url"
                   value={avatar}
-                onChange={(e) => setAvatar(e.target.value)}
-                className="input"
-                placeholder="https://..."
-              />
+                  onChange={(e) => setAvatar(e.target.value)}
+                  className="input"
+                  placeholder="https://..."
+                />
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    id="avatar-upload"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setError('');
+                      setMessage('');
+                      setIsUploadingAvatar(true);
+                      try {
+                        const uploadedUrl = await uploadImage(file, 'avatar');
+                        setAvatar(uploadedUrl);
+                        setMessage('Avatar enviado com sucesso!');
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : 'Falha no upload do avatar.');
+                      } finally {
+                        setIsUploadingAvatar(false);
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                  <label htmlFor="avatar-upload" className="btn-secondary cursor-pointer">
+                    {isUploadingAvatar ? 'A enviar…' : 'Carregar avatar'}
+                  </label>
+                </div>
                 <p className="text-xs text-throne-400 mt-1">Se vazio, usamos uma letra do teu nome.</p>
               </div>
               <div>

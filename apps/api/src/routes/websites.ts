@@ -259,6 +259,8 @@ websitesRouter.post('/', requireAuth, async (c) => {
       url?: unknown;
       description?: unknown;
       category_id?: unknown;
+      logo_url?: unknown;
+      screenshot_url?: unknown;
       metadata?: unknown;
     };
     try {
@@ -267,7 +269,7 @@ websitesRouter.post('/', requireAuth, async (c) => {
       return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
     }
 
-    const { name, url, description, category_id, metadata } = body;
+    const { name, url, description, category_id, logo_url, screenshot_url, metadata } = body;
 
     if (typeof name !== 'string' || name.trim().length < MIN_NAME_LENGTH) {
       return c.json(
@@ -297,6 +299,34 @@ websitesRouter.post('/', requireAuth, async (c) => {
         return c.json(createError('VALIDATION_ERROR', 'Descrição inválida'), 400);
       }
       normalizedDescription = description.trim();
+    }
+
+    const normalizeOptionalImageUrl = (value: unknown, field: string) => {
+      if (value === undefined || value === null || value === '') return null;
+      if (typeof value !== 'string') {
+        throw new Error(`${field} inválido`);
+      }
+      try {
+        const parsed = new URL(value);
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+          throw new Error(`${field} inválido`);
+        }
+        return parsed.toString();
+      } catch {
+        throw new Error(`${field} inválido`);
+      }
+    };
+
+    let normalizedLogoUrl: string | null;
+    let normalizedScreenshotUrl: string | null;
+    try {
+      normalizedLogoUrl = normalizeOptionalImageUrl(logo_url, 'logo_url');
+      normalizedScreenshotUrl = normalizeOptionalImageUrl(screenshot_url, 'screenshot_url');
+    } catch (err) {
+      return c.json(
+        createError('VALIDATION_ERROR', err instanceof Error ? err.message : 'URL de imagem inválida'),
+        400,
+      );
     }
 
     if (metadata && typeof metadata === 'object' && 'languages' in (metadata as Record<string, unknown>)) {
@@ -344,18 +374,37 @@ websitesRouter.post('/', requireAuth, async (c) => {
 
     try {
       await c.env.DB.prepare(
-        `INSERT INTO websites (id, name, url, description, category_id, status, submitted_by, featured, metadata, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'pending', ?, 0, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        `INSERT INTO websites (id, name, url, description, logo_url, screenshot_url, category_id, status, submitted_by, featured, metadata, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, 0, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       )
-        .bind(id, name.trim(), normalizedUrl, normalizedDescription, category_id, userId, normalizedMetadata)
+        .bind(
+          id,
+          name.trim(),
+          normalizedUrl,
+          normalizedDescription,
+          normalizedLogoUrl,
+          normalizedScreenshotUrl,
+          category_id,
+          userId,
+          normalizedMetadata,
+        )
         .run();
     } catch (err) {
       if (!isMissingMetadataColumn(err)) throw err;
       await c.env.DB.prepare(
-        `INSERT INTO websites (id, name, url, description, category_id, status, submitted_by, featured, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 'pending', ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        `INSERT INTO websites (id, name, url, description, logo_url, screenshot_url, category_id, status, submitted_by, featured, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       )
-        .bind(id, name.trim(), normalizedUrl, normalizedDescription, category_id, userId)
+        .bind(
+          id,
+          name.trim(),
+          normalizedUrl,
+          normalizedDescription,
+          normalizedLogoUrl,
+          normalizedScreenshotUrl,
+          category_id,
+          userId,
+        )
         .run();
     }
 

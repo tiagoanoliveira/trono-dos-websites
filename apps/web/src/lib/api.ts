@@ -19,8 +19,9 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
+    const bodyIsFormData = options.body instanceof FormData;
     const headers: HeadersInit = {
-      'Content-Type': 'application/json',
+      ...(bodyIsFormData ? {} : { 'Content-Type': 'application/json' }),
       ...options.headers,
     };
 
@@ -63,23 +64,26 @@ class ApiClient {
   }
 
   async post<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
+    const isFormData = body instanceof FormData;
     return this.request<T>(endpoint, {
       method: 'POST',
-      body: body ? JSON.stringify(body) : undefined,
+      body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
     });
   }
 
   async put<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
+    const isFormData = body instanceof FormData;
     return this.request<T>(endpoint, {
       method: 'PUT',
-      body: body ? JSON.stringify(body) : undefined,
+      body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
     });
   }
 
   async patch<T>(endpoint: string, body?: unknown): Promise<ApiResponse<T>> {
+    const isFormData = body instanceof FormData;
     return this.request<T>(endpoint, {
       method: 'PATCH',
-      body: body ? JSON.stringify(body) : undefined,
+      body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
     });
   }
 

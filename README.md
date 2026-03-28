@@ -269,9 +269,11 @@ npm run db:migrate
    - **Functions directory:** o Pages deteta automaticamente `functions` na raiz do repositório (não é preciso apontar manualmente na UI atual; basta garantir que a pasta existe).
    - **Wrangler config path (opcional mas recomendado):** `apps/web/wrangler.toml`
 5. Bindings/Variáveis (definir por ambiente em Pages):
-   - D1: Binding `DB` associado à base `trono-db` (usa o mesmo ID do `wrangler.toml`)
-   - Vars: `ENVIRONMENT=production`; opcional `DEBUG_LOGS=true` para ativar logs de pedidos (default: desligado).
-   - Secrets: `JWT_SECRET` (obrigatório); `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` se usares OAuth.
+    - D1: Binding `DB` associado à base `trono-db` (usa o mesmo ID do `wrangler.toml`)
+    - R2: Binding `R2_BUCKET` para bucket `trono-assets` (ou o nome que definires no teu projeto).
+    - Vars: `ENVIRONMENT=production`; opcional `DEBUG_LOGS=true` para ativar logs de pedidos (default: desligado).
+    - Vars opcionais para ficheiros: `R2_PUBLIC_BASE_URL=https://<teu-dominio-de-assets>` para servir imagens por CDN pública. Se vazio, usa fallback por `/api/uploads/images/*`.
+    - Secrets: `JWT_SECRET` (obrigatório); `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` se usares OAuth.
 6. Rotas: a função está em `functions/api/[[path]].ts` (raiz do repo) e expõe `/api/*` (o frontend continua a chamar `/api` por defeito).
 7. Local: `cd apps/web && wrangler pages dev --local` (usa o `wrangler.toml` da pasta para ler bindings).
 

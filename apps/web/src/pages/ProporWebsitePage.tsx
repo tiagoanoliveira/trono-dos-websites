@@ -6,6 +6,7 @@ import { useCategories } from '@/hooks/useCategories';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { ALLOWED_LANGUAGES } from '@/constants/languages';
+import { uploadImage } from '@/hooks/useImageUpload';
 
 type MySuggestion = {
   id: string;
@@ -51,6 +52,8 @@ export function ProporWebsitePage() {
     url: '',
     description: '',
     category_id: '',
+    logo_url: '',
+    screenshot_url: '',
   });
   const [metadata, setMetadata] = useState({
     author: '',
@@ -62,6 +65,9 @@ export function ProporWebsitePage() {
     images: [''],
   });
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '' });
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
+  const [uploadingMetaIndex, setUploadingMetaIndex] = useState<number | null>(null);
 
   const categoryOptions = useMemo(() => {
     const options: { value: string; label: string }[] = [];
@@ -95,7 +101,7 @@ export function ProporWebsitePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-websites'] });
-      setForm({ name: '', url: '', description: '', category_id: '' });
+      setForm({ name: '', url: '', description: '', category_id: '', logo_url: '', screenshot_url: '' });
       setMetadata({
         author: '',
         launchDate: '',
@@ -205,6 +211,76 @@ export function ProporWebsitePage() {
                 onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
                 required
               />
+            </div>
+            <div>
+              <label className="label">Logo (URL)</label>
+              <input
+                className="input"
+                type="url"
+                placeholder="https://..."
+                value={form.logo_url}
+                onChange={(e) => setForm((f) => ({ ...f, logo_url: e.target.value }))}
+              />
+              <div className="mt-2">
+                <input
+                  id="logo-upload"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploadingLogo(true);
+                    try {
+                      const uploadedUrl = await uploadImage(file, 'logo');
+                      setForm((f) => ({ ...f, logo_url: uploadedUrl }));
+                    } catch {
+                      // error surfaced in mutation submit if needed
+                    } finally {
+                      setUploadingLogo(false);
+                      e.target.value = '';
+                    }
+                  }}
+                />
+                <label htmlFor="logo-upload" className="btn-secondary cursor-pointer inline-flex">
+                  {uploadingLogo ? 'A enviar logo…' : 'Carregar logo'}
+                </label>
+              </div>
+            </div>
+            <div>
+              <label className="label">Screenshot (URL)</label>
+              <input
+                className="input"
+                type="url"
+                placeholder="https://..."
+                value={form.screenshot_url}
+                onChange={(e) => setForm((f) => ({ ...f, screenshot_url: e.target.value }))}
+              />
+              <div className="mt-2">
+                <input
+                  id="screenshot-upload"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploadingScreenshot(true);
+                    try {
+                      const uploadedUrl = await uploadImage(file, 'screenshot');
+                      setForm((f) => ({ ...f, screenshot_url: uploadedUrl }));
+                    } catch {
+                      // error surfaced in mutation submit if needed
+                    } finally {
+                      setUploadingScreenshot(false);
+                      e.target.value = '';
+                    }
+                  }}
+                />
+                <label htmlFor="screenshot-upload" className="btn-secondary cursor-pointer inline-flex">
+                  {uploadingScreenshot ? 'A enviar screenshot…' : 'Carregar screenshot'}
+                </label>
+              </div>
             </div>
             <div>
               <label className="label">Descrição</label>
@@ -345,6 +421,35 @@ export function ProporWebsitePage() {
                       + Foto
                     </button>
                   )}
+                  <input
+                    id={`meta-image-upload-${idx}`}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setUploadingMetaIndex(idx);
+                      try {
+                        const uploadedUrl = await uploadImage(file, 'website-image');
+                        setMetadata((m) => ({
+                          ...m,
+                          images: m.images.map((current, currentIdx) =>
+                            currentIdx === idx ? uploadedUrl : current,
+                          ),
+                        }));
+                      } finally {
+                        setUploadingMetaIndex(null);
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                  <label
+                    htmlFor={`meta-image-upload-${idx}`}
+                    className="btn-secondary cursor-pointer inline-flex whitespace-nowrap"
+                  >
+                    {uploadingMetaIndex === idx ? 'A enviar…' : 'Upload'}
+                  </label>
                 </div>
               ))}
             </div>
