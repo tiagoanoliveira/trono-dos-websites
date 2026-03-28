@@ -36,23 +36,26 @@ export function useWebsites(filters: WebsiteFilters = {}) {
         return raw as PaginatedResponse<Website>;
       }
 
-      const page = filters.page ?? 1;
-      const perPage = filters.perPage ?? 20;
       const dataArray = Array.isArray(raw) ? raw : [];
-      const meta =
-        response.meta ?? {
-          total: dataArray.length,
-          page,
-          perPage,
-          totalPages: Math.max(1, Math.ceil((response.meta?.total ?? dataArray.length) / perPage)),
-          hasNextPage: false,
-          hasPrevPage: page > 1,
-        };
+      const fallbackPage = filters.page ?? 1;
+      const fallbackPerPage = filters.perPage ?? 20;
+      const providedMeta = response.meta ?? {};
 
-      return {
-        data: dataArray,
-        meta,
+      const page = providedMeta.page ?? fallbackPage;
+      const perPage = providedMeta.perPage ?? fallbackPerPage;
+      const total = providedMeta.total ?? dataArray.length;
+      const totalPages = providedMeta.totalPages ?? Math.max(1, Math.ceil(total / perPage));
+
+      const meta = {
+        total,
+        page,
+        perPage,
+        totalPages,
+        hasNextPage: providedMeta.hasNextPage ?? page < totalPages,
+        hasPrevPage: providedMeta.hasPrevPage ?? page > 1,
       };
+
+      return { data: dataArray, meta };
     },
   });
 
