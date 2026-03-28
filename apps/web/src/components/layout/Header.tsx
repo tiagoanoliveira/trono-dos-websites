@@ -78,9 +78,17 @@ export function Header() {
                   onClick={() => setShowUserMenu((v) => !v)}
                   className="inline-flex items-center gap-2 rounded-full bg-throne-100 px-3 py-1.5 text-sm font-medium text-throne-700 border border-throne-200 hover:border-crown-300 transition-colors"
                 >
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-crown-500 text-white font-semibold uppercase">
-                    {getInitials(user.name)}
-                  </span>
+                  {user.avatar_url ? (
+                    <img
+                      src={user.avatar_url}
+                      alt={`Avatar de ${user.name}`}
+                      className="h-8 w-8 rounded-full border border-throne-200 object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-crown-500 text-white font-semibold uppercase">
+                      {getInitials(user.name)}
+                    </span>
+                  )}
                   <span className="text-left">
                     <span className="block leading-tight">{user.name}</span>
                     <span className="text-xs text-throne-400">Perfil</span>

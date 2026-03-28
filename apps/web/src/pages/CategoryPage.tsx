@@ -423,24 +423,20 @@ function WebsiteListRow({
               {languagesLabel}
             </span>
           )}
-          {isOpenSource !== undefined && (
+          {isOpenSource && (
             <span className="flex items-center gap-1">
               <GithubIcon className="h-3.5 w-3.5" />
-              {isOpenSource ? (
-                sourceUrl ? (
-                  <a
-                    href={sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-crown-600 hover:text-crown-700"
-                  >
-                    Código aberto
-                  </a>
-                ) : (
-                  'Código aberto'
-                )
+              {sourceUrl ? (
+                <a
+                  href={sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-crown-600 hover:text-crown-700"
+                >
+                  Código aberto
+                </a>
               ) : (
-                'Código fechado'
+                'Código aberto'
               )}
             </span>
           )}

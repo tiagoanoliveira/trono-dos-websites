@@ -225,24 +225,20 @@ export function WebsitePage() {
                     {languagesLabel}
                   </span>
                 )}
-                {isOpenSource !== undefined && (
+                {isOpenSource && (
                   <span className="flex items-center gap-1">
                     <GithubIcon className="h-4 w-4" />
-                    {isOpenSource ? (
-                      sourceUrl ? (
-                        <a
-                          href={sourceUrl}
-                          className="text-crown-600 hover:text-crown-700"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          Código aberto
-                        </a>
-                      ) : (
-                        'Código aberto'
-                      )
+                    {sourceUrl ? (
+                      <a
+                        href={sourceUrl}
+                        className="text-crown-600 hover:text-crown-700"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Código aberto
+                      </a>
                     ) : (
-                      'Código fechado'
+                      'Código aberto'
                     )}
                   </span>
                 )}
