@@ -68,6 +68,7 @@ export function ProporWebsitePage() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
   const [uploadingMetaIndex, setUploadingMetaIndex] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState('');
 
   const categoryOptions = useMemo(() => {
     const options: { value: string; label: string }[] = [];
@@ -230,12 +231,13 @@ export function ProporWebsitePage() {
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
+                    setUploadError('');
                     setUploadingLogo(true);
                     try {
                       const uploadedUrl = await uploadImage(file, 'logo');
                       setForm((f) => ({ ...f, logo_url: uploadedUrl }));
-                    } catch {
-                      // error surfaced in mutation submit if needed
+                    } catch (err) {
+                      setUploadError(err instanceof Error ? err.message : 'Falha ao enviar logo.');
                     } finally {
                       setUploadingLogo(false);
                       e.target.value = '';
@@ -265,12 +267,13 @@ export function ProporWebsitePage() {
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
+                    setUploadError('');
                     setUploadingScreenshot(true);
                     try {
                       const uploadedUrl = await uploadImage(file, 'screenshot');
                       setForm((f) => ({ ...f, screenshot_url: uploadedUrl }));
-                    } catch {
-                      // error surfaced in mutation submit if needed
+                    } catch (err) {
+                      setUploadError(err instanceof Error ? err.message : 'Falha ao enviar screenshot.');
                     } finally {
                       setUploadingScreenshot(false);
                       e.target.value = '';
@@ -429,6 +432,7 @@ export function ProporWebsitePage() {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
+                      setUploadError('');
                       setUploadingMetaIndex(idx);
                       try {
                         const uploadedUrl = await uploadImage(file, 'website-image');
@@ -438,6 +442,8 @@ export function ProporWebsitePage() {
                             currentIdx === idx ? uploadedUrl : current,
                           ),
                         }));
+                      } catch (err) {
+                        setUploadError(err instanceof Error ? err.message : 'Falha ao enviar imagem.');
                       } finally {
                         setUploadingMetaIndex(null);
                         e.target.value = '';
@@ -477,6 +483,7 @@ export function ProporWebsitePage() {
                 {(submitWebsite.error as Error).message || 'Erro ao submeter'}
               </p>
             )}
+            {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
             {submitWebsite.isSuccess && (
               <p className="text-sm text-green-700 bg-green-50 border border-green-200 px-3 py-2 rounded-lg">
                 Submissão enviada! Avisar-te-emos quando for revista.
