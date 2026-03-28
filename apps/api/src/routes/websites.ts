@@ -38,7 +38,13 @@ const SORT_MAP: Record<SortOption, string> = {
   featured: 'w.featured DESC, avg_rating DESC NULLS LAST, w.created_at DESC',
 };
 
-const VISIBLE_STATUS_CONDITION = "(w.status IN ('approved', 'active') OR w.status IS NULL)";
+function visibleStatusCondition(alias?: string) {
+  const prefix = alias ? `${alias}.` : '';
+  return `(${prefix}status IN ('approved', 'active') OR ${prefix}status IS NULL)`;
+}
+
+const VISIBLE_STATUS_CONDITION = visibleStatusCondition('w');
+const VISIBLE_STATUS_CONDITION_NO_ALIAS = visibleStatusCondition();
 
 const MIN_RATING = 1;
 const MAX_RATING = 5;
@@ -91,9 +97,11 @@ function normalizeWebsiteMetadata(input: unknown): string | null {
   }
 
   const launchPrecision = data.launchPrecision;
+  const allowedPrecisions: WebsiteMetadata['launch_precision'][] = ['exact', 'month', 'year', 'unknown'];
   if (
     typeof launchPrecision === 'string' &&
-    (metadata.launch_date || launchPrecision === 'exact' || launchPrecision === 'month' || launchPrecision === 'year')
+    allowedPrecisions.includes(launchPrecision as WebsiteMetadata['launch_precision']) &&
+    (metadata.launch_date || launchPrecision === 'unknown')
   ) {
     metadata.launch_precision = launchPrecision as WebsiteMetadata['launch_precision'];
   }
@@ -587,7 +595,9 @@ websitesRouter.post('/:id/ratings', requireAuth, async (c) => {
     const { id } = c.req.param();
     const userId = c.get('userId');
 
-    const exists = await c.env.DB.prepare(`SELECT id FROM websites WHERE id = ? AND ${VISIBLE_STATUS_CONDITION}`)
+    const exists = await c.env.DB.prepare(
+      `SELECT id FROM websites WHERE id = ? AND ${VISIBLE_STATUS_CONDITION_NO_ALIAS}`,
+    )
       .bind(id)
       .first<{ id: string }>();
 
@@ -709,7 +719,9 @@ websitesRouter.post('/:id/comments', requireAuth, async (c) => {
     const { id } = c.req.param();
     const userId = c.get('userId');
 
-    const website = await c.env.DB.prepare(`SELECT id FROM websites WHERE id = ? AND ${VISIBLE_STATUS_CONDITION}`)
+    const website = await c.env.DB.prepare(
+      `SELECT id FROM websites WHERE id = ? AND ${VISIBLE_STATUS_CONDITION_NO_ALIAS}`,
+    )
       .bind(id)
       .first<{ id: string }>();
 
