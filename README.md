@@ -252,6 +252,9 @@ npm run db:migrate
 # Migrações recentes
 # - 001_add_website_metadata.sql (coluna metadata em websites)
 # - 002_add_comment_kind.sql (tipo de comentário)
+
+# Alterações recentes
+# - Listagens de categorias e websites passam a mostrar sites com estado `approved` ou `active`
 ```
 
 ## 🚀 Deploy na Cloudflare

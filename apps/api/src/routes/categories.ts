@@ -155,8 +155,8 @@ categoriesRouter.get('/', async (c) => {
          c.id, c.name, c.slug, c.description, c.icon, c.parent_id, c.status, c.created_at,
          COUNT(w.id) AS website_count
        FROM categories c
-       LEFT JOIN websites w
-         ON w.category_id = c.id AND w.status = 'approved'
+         LEFT JOIN websites w
+          ON w.category_id = c.id AND (w.status IN ('approved', 'active') OR w.status IS NULL)
        WHERE c.status = 'active'
        GROUP BY c.id
        ORDER BY c.parent_id NULLS FIRST, c.name ASC`,
@@ -187,8 +187,8 @@ categoriesRouter.get('/:slug', async (c) => {
          c.id, c.name, c.slug, c.description, c.icon, c.parent_id, c.status, c.created_at,
          COUNT(w.id) AS website_count
        FROM categories c
-       LEFT JOIN websites w
-         ON w.category_id = c.id AND w.status = 'approved'
+         LEFT JOIN websites w
+          ON w.category_id = c.id AND (w.status IN ('approved', 'active') OR w.status IS NULL)
        WHERE c.status = 'active'
        GROUP BY c.id`,
     )

@@ -38,6 +38,8 @@ const SORT_MAP: Record<SortOption, string> = {
   featured: 'w.featured DESC, avg_rating DESC NULLS LAST, w.created_at DESC',
 };
 
+const VISIBLE_STATUS_CONDITION = "(w.status IN ('approved', 'active') OR w.status IS NULL)";
+
 const MIN_RATING = 1;
 const MAX_RATING = 5;
 const MIN_COMMENT_LENGTH = 3;
@@ -374,7 +376,7 @@ websitesRouter.get('/', async (c) => {
     const sort: SortOption = isValidSort(sortParam) ? sortParam : 'recent';
     const orderClause = SORT_MAP[sort];
 
-    const conditions: string[] = ["w.status = 'approved'"];
+    const conditions: string[] = [VISIBLE_STATUS_CONDITION];
     const bindings: (string | number)[] = [];
 
     if (categoryId) {
@@ -489,7 +491,7 @@ websitesRouter.get('/:id', optionalAuth, async (c) => {
     `;
 
     const whereClause = `
-       WHERE w.id = ? AND w.status = 'approved'
+       WHERE w.id = ? AND ${VISIBLE_STATUS_CONDITION}
        GROUP BY w.id
     `;
 
@@ -550,9 +552,7 @@ websitesRouter.post('/:id/ratings', requireAuth, async (c) => {
     const { id } = c.req.param();
     const userId = c.get('userId');
 
-    const exists = await c.env.DB.prepare(
-      "SELECT id FROM websites WHERE id = ? AND status = 'approved'",
-    )
+    const exists = await c.env.DB.prepare(`SELECT id FROM websites WHERE id = ? AND ${VISIBLE_STATUS_CONDITION}`)
       .bind(id)
       .first<{ id: string }>();
 
@@ -674,9 +674,7 @@ websitesRouter.post('/:id/comments', requireAuth, async (c) => {
     const { id } = c.req.param();
     const userId = c.get('userId');
 
-    const website = await c.env.DB.prepare(
-      "SELECT id FROM websites WHERE id = ? AND status = 'approved'",
-    )
+    const website = await c.env.DB.prepare(`SELECT id FROM websites WHERE id = ? AND ${VISIBLE_STATUS_CONDITION}`)
       .bind(id)
       .first<{ id: string }>();
 
