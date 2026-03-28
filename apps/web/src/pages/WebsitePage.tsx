@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDate, getInitials, cn } from '@/lib/utils';
@@ -15,7 +15,7 @@ import { useComments, useAddComment, useVoteComment } from '@/hooks/useComments'
 export function WebsitePage() {
   const { id = '' } = useParams<{ id: string }>();
   const { website, isLoading, error } = useWebsiteById(id);
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [userVote, setUserVote] = useState<number>(0);
@@ -39,6 +39,8 @@ export function WebsitePage() {
   const isOpenSource = metadata?.is_open_source;
   const sourceUrl = metadata?.source_url;
   const images = metadata?.images;
+  const canSeeBreakdown =
+    user?.role === 'admin' || (!!website?.submitted_by && website.submitted_by === user?.id);
 
   const voteMutation = useMutation({
     mutationFn: async (value: -1 | 0 | 1) => {
@@ -164,12 +166,50 @@ export function WebsitePage() {
                 <p className="text-throne-600 leading-relaxed">{website.description}</p>
               )}
 
-              {/* Score */}
-              <div className="inline-flex items-center gap-2 rounded-full bg-throne-50 px-3 py-2 text-sm text-throne-700">
-                <span className="font-semibold text-throne-900">{website.score ?? 0}</span>
-                <span className="text-throne-400">
-                  {website.upvotes ?? 0} ↑ · {website.downvotes ?? 0} ↓
-                </span>
+              {/* Score & quick vote */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="inline-flex items-center gap-2 rounded-full bg-throne-50 px-3 py-2 text-sm text-throne-700">
+                  <span className="font-semibold text-throne-900">{website.score ?? 0}</span>
+                  {canSeeBreakdown && (
+                    <span className="text-throne-400">
+                      {website.upvotes ?? 0} ↑ · {website.downvotes ?? 0} ↓
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    className={cn(
+                      'btn-secondary h-9 px-3',
+                      userVote === 1 && 'border-crown-500 text-crown-700',
+                      voteMutation.isPending && 'opacity-60 cursor-not-allowed',
+                    )}
+                    onClick={() => (isAuthenticated ? voteMutation.mutate(userVote === 1 ? 0 : 1) : navigate('/entrar'))}
+                    disabled={voteMutation.isPending || !isAuthenticated}
+                  >
+                    ▲ Up
+                  </button>
+                  <button
+                    className={cn(
+                      'btn-secondary h-9 px-3',
+                      userVote === -1 && 'border-red-200 text-red-700',
+                      voteMutation.isPending && 'opacity-60 cursor-not-allowed',
+                    )}
+                    onClick={() =>
+                      isAuthenticated ? voteMutation.mutate(userVote === -1 ? 0 : -1) : navigate('/entrar')
+                    }
+                    disabled={voteMutation.isPending || !isAuthenticated}
+                  >
+                    ▼ Down
+                  </button>
+                  {!isAuthenticated && (
+                    <button className="text-sm text-crown-600 hover:text-crown-700" onClick={() => navigate('/entrar')}>
+                      Entrar para votar
+                    </button>
+                  )}
+                </div>
+                {isAuthenticated && userVote === 0 && (
+                  <p className="text-xs text-throne-500">Ainda não votaste. Escolhe ↑ ou ↓ para ajudar a comunidade.</p>
+                )}
               </div>
 
               {/* Meta */}
@@ -262,17 +302,6 @@ export function WebsitePage() {
           </div>
         )}
 
-        <VoteSection
-          upvotes={website.upvotes ?? 0}
-          downvotes={website.downvotes ?? 0}
-          score={website.score ?? 0}
-          userVote={userVote}
-          isAuthenticated={isAuthenticated}
-          isSubmitting={voteMutation.isPending}
-          onVote={(value) => voteMutation.mutate(value)}
-          onRequireLogin={() => navigate('/entrar')}
-        />
-
         <CommentsSection
           comments={comments}
           isLoading={commentsLoading}
@@ -284,6 +313,7 @@ export function WebsitePage() {
           errorMessage={addCommentMutation.error instanceof Error ? addCommentMutation.error.message : ''}
           onVote={(commentId, value) => voteCommentMutation.mutate({ commentId, value })}
           voting={voteCommentMutation.isPending}
+          canSeeBreakdown={canSeeBreakdown}
         />
 
         {/* Related websites */}
@@ -319,82 +349,6 @@ export function WebsitePage() {
   );
 }
 
-function VoteSection({
-  upvotes,
-  downvotes,
-  score,
-  userVote,
-  isAuthenticated,
-  isSubmitting,
-  onVote,
-  onRequireLogin,
-}: {
-  upvotes: number;
-  downvotes: number;
-  score: number;
-  userVote: number;
-  isAuthenticated: boolean;
-  isSubmitting: boolean;
-  onVote: (value: -1 | 0 | 1) => void;
-  onRequireLogin: () => void;
-}) {
-  const toggleUp = () => onVote(userVote === 1 ? 0 : 1);
-  const toggleDown = () => onVote(userVote === -1 ? 0 : -1);
-
-  return (
-    <div className="card p-6 space-y-4">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h2 className="text-lg font-semibold text-throne-800 flex items-center gap-2">
-            <span>🔥</span> Votos da comunidade
-          </h2>
-          <p className="text-sm text-throne-500">
-            {upvotes + downvotes > 0 ? `${upvotes} up · ${downvotes} down` : 'Sê o primeiro a votar neste website.'}
-          </p>
-        </div>
-        <div className="inline-flex items-center gap-2 rounded-full bg-throne-50 px-3 py-2 text-sm text-throne-700">
-          <span className="font-semibold text-throne-900">{score}</span>
-          <span className="text-throne-400">pontuação</span>
-        </div>
-      </div>
-
-      {isAuthenticated ? (
-        <div className="flex items-center gap-3">
-          <button
-            className={cn(
-              'btn-secondary flex items-center gap-2',
-              userVote === 1 && 'border-crown-500 text-crown-700',
-              isSubmitting && 'opacity-60 cursor-not-allowed',
-            )}
-            onClick={toggleUp}
-            disabled={isSubmitting}
-          >
-            ▲ Upvote
-          </button>
-          <button
-            className={cn(
-              'btn-secondary flex items-center gap-2',
-              userVote === -1 && 'border-red-200 text-red-700',
-              isSubmitting && 'opacity-60 cursor-not-allowed',
-            )}
-            onClick={toggleDown}
-            disabled={isSubmitting}
-          >
-            ▼ Downvote
-          </button>
-        </div>
-      ) : (
-        <div className="flex items-center gap-3 text-sm text-throne-600">
-          <span>Inicia sessão para votar neste website.</span>
-          <button className="btn-secondary px-3 py-1" onClick={onRequireLogin}>
-            Entrar
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function CommentsSection({
   comments,
   isLoading,
@@ -406,6 +360,7 @@ function CommentsSection({
   errorMessage,
   onVote,
   voting,
+  canSeeBreakdown,
 }: {
   comments: Comment[];
   isLoading: boolean;
@@ -417,11 +372,13 @@ function CommentsSection({
   errorMessage?: string;
   onVote: (commentId: string, value: -1 | 0 | 1) => void;
   voting: boolean;
+  canSeeBreakdown: boolean;
 }) {
   const [content, setContent] = useState('');
   const [formError, setFormError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [kind, setKind] = useState('opinion');
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const handleSubmit = async () => {
     setFormError('');
@@ -458,10 +415,18 @@ function CommentsSection({
           <label className="label">Partilha a tua opinião</label>
           <div className="rounded-xl border border-throne-200 bg-white shadow-sm">
             <textarea
-              className="input min-h-[120px] border-none focus:ring-0"
+              ref={textareaRef}
+              className="input min-h-[48px] border-none focus:ring-0 resize-none"
               placeholder="Escreve algo útil para a comunidade..."
               value={content}
-              onChange={(e) => setContent(e.target.value)}
+              onChange={(e) => {
+                setContent(e.target.value);
+                const el = textareaRef.current;
+                if (el) {
+                  el.style.height = 'auto';
+                  el.style.height = `${el.scrollHeight}px`;
+                }
+              }}
               maxLength={1000}
             />
             <div className="flex items-center justify-between gap-3 border-t border-throne-100 px-3 py-2 flex-wrap">
@@ -526,6 +491,7 @@ function CommentsSection({
               isSubmitting={isSubmitting}
               onVote={onVote}
               voting={voting}
+              canSeeBreakdown={canSeeBreakdown}
             />
           ))
         )}
@@ -542,6 +508,7 @@ function CommentItem({
   isSubmitting,
   onVote,
   voting,
+  canSeeBreakdown,
 }: {
   comment: Comment;
   isAuthenticated: boolean;
@@ -550,10 +517,12 @@ function CommentItem({
   isSubmitting: boolean;
   onVote: (commentId: string, value: -1 | 0 | 1) => void;
   voting: boolean;
+  canSeeBreakdown: boolean;
 }) {
   const [replying, setReplying] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [error, setError] = useState('');
+  const replyRef = useRef<HTMLTextAreaElement | null>(null);
 
   const handleReply = async () => {
     setError('');
@@ -587,7 +556,14 @@ function CommentItem({
           <p className="text-throne-700 leading-relaxed">{comment.content}</p>
           <div className="mt-2 flex items-center gap-3 text-sm text-throne-500 flex-wrap">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-throne-400">score: {comment.score}</span>
+              <span className="inline-flex items-center gap-2 rounded-full bg-throne-50 px-2 py-1 text-xs text-throne-600">
+                <span className="font-semibold text-throne-900">{comment.score}</span>
+                {canSeeBreakdown && (
+                  <span className="text-throne-400">
+                    {comment.upvotes} ↑ · {comment.downvotes} ↓
+                  </span>
+                )}
+              </span>
               <button
                 className={cn(
                   'inline-flex items-center gap-1 rounded-full border border-throne-200 px-2 py-1',
@@ -601,9 +577,19 @@ function CommentItem({
               >
                 ▲
               </button>
-              <span className="text-xs text-throne-400">
-                {comment.upvotes} ↑ · {comment.downvotes} ↓
-              </span>
+              <button
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full border border-throne-200 px-2 py-1',
+                  (comment.user_vote ?? 0) === -1 && 'border-red-200 text-red-700',
+                  voting && 'opacity-60 cursor-not-allowed',
+                )}
+                onClick={() =>
+                  isAuthenticated ? onVote(comment.id, (comment.user_vote ?? 0) === -1 ? 0 : -1) : onLogin()
+                }
+                disabled={voting}
+              >
+                ▼
+              </button>
             </div>
             {isAuthenticated ? (
               <button className="link" onClick={() => setReplying((v) => !v)}>
@@ -618,9 +604,17 @@ function CommentItem({
           {replying && (
             <div className="mt-2 space-y-2">
               <textarea
-                className="input min-h-[80px]"
+                ref={replyRef}
+                className="input min-h-[48px] resize-none"
                 value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
+                onChange={(e) => {
+                  setReplyText(e.target.value);
+                  const el = replyRef.current;
+                  if (el) {
+                    el.style.height = 'auto';
+                    el.style.height = `${el.scrollHeight}px`;
+                  }
+                }}
                 placeholder="Responder a este comentário..."
               />
               <div className="flex items-center gap-2">
@@ -652,6 +646,7 @@ function CommentItem({
                 isSubmitting={isSubmitting}
                 onVote={onVote}
                 voting={voting}
+                canSeeBreakdown={canSeeBreakdown}
               />
             ))}
           </div>

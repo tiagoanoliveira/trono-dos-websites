@@ -21,6 +21,7 @@ export interface Website {
   category_name?: string;
   category_slug?: string;
   status: 'pending' | 'approved' | 'rejected';
+   submitted_by?: string | null;
   featured: boolean;
   upvotes?: number;
   downvotes?: number;

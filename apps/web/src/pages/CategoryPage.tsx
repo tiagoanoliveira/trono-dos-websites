@@ -26,7 +26,7 @@ export function CategoryPage() {
   const slug = slugSegments[slugSegments.length - 1] ?? '';
   const [sort, setSort] = useState<SortOption>('rating');
   const [page, setPage] = useState(1);
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   const queryClient = useQueryClient();
 
   const { categories, isLoading: categoriesLoading } = useCategories();
@@ -275,6 +275,7 @@ export function CategoryPage() {
                 }}
                 voting={voteMutation.isPending && voteMutation.variables?.websiteId === site.id}
                 disabled={!isAuthenticated}
+                canSeeBreakdown={user?.role === 'admin' || (!!site.submitted_by && site.submitted_by === user?.id)}
               />
             ))}
           </div>
@@ -319,11 +320,13 @@ function WebsiteListRow({
   onVote,
   voting,
   disabled,
+  canSeeBreakdown,
 }: {
   website: Website;
   onVote: (direction: 'up' | 'down') => void;
   voting: boolean;
   disabled: boolean;
+  canSeeBreakdown: boolean;
 }) {
   const metadata = website.metadata;
   const launchLabel = formatLaunchDate(metadata?.launch_date, metadata?.launch_precision);
@@ -439,14 +442,18 @@ function WebsiteListRow({
         </div>
 
         <div className="flex flex-wrap gap-4 text-xs text-throne-500">
-          <span className="flex items-center gap-1">
-            <ArrowUpIcon className="h-3 w-3" />
-            {upvotes} upvotes
-          </span>
-          <span className="flex items-center gap-1">
-            <ArrowDownIcon className="h-3 w-3" />
-            {downvotes} downvotes
-          </span>
+          {canSeeBreakdown && (
+            <>
+              <span className="flex items-center gap-1">
+                <ArrowUpIcon className="h-3 w-3" />
+                {upvotes} upvotes
+              </span>
+              <span className="flex items-center gap-1">
+                <ArrowDownIcon className="h-3 w-3" />
+                {downvotes} downvotes
+              </span>
+            </>
+          )}
         </div>
       </div>
     </div>

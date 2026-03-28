@@ -15,6 +15,7 @@ type WebsiteRow = {
   category_name: string | null;
   category_slug: string | null;
   status: string;
+  submitted_by: string | null;
   featured: number;
   created_at: string;
   updated_at: string;
@@ -510,7 +511,7 @@ websitesRouter.get('/', optionalAuth, async (c) => {
         `SELECT
            w.id, w.name, w.url, w.description, w.logo_url, w.screenshot_url,
            w.category_id, cat.name AS category_name, cat.slug AS category_slug,
-           w.status, w.featured, w.created_at, w.updated_at,
+           w.status, w.submitted_by, w.featured, w.created_at, w.updated_at,
            ${metadataSelect}
            COALESCE(wv.upvotes, 0) AS upvotes,
            COALESCE(wv.downvotes, 0) AS downvotes,
@@ -570,7 +571,7 @@ const selectBase = `
       SELECT
          w.id, w.name, w.url, w.description, w.logo_url, w.screenshot_url,
          w.category_id, cat.name AS category_name, cat.slug AS category_slug,
-         w.status, w.featured, w.created_at, w.updated_at, w.metadata,
+         w.status, w.submitted_by, w.featured, w.created_at, w.updated_at, w.metadata,
          COALESCE(wv.upvotes,0) AS upvotes,
          COALESCE(wv.downvotes,0) AS downvotes,
          COALESCE(wv.score,0) AS score,
