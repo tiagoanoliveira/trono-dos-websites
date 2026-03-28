@@ -377,7 +377,7 @@ export function ProporWebsitePage() {
               </div>
             </div>
             <div className="space-y-2">
-              <label className="label">Fotos</label>
+              <label className="label">Screenshots adicionais</label>
               {metadata.images.map((img, idx) => (
                 <div key={idx} className="flex gap-2">
                   {idx === metadata.images.length - 1 && (
@@ -386,7 +386,7 @@ export function ProporWebsitePage() {
                       className="btn-secondary"
                       onClick={() => setMetadata((m) => ({ ...m, images: [...m.images, ''] }))}
                     >
-                      + Foto
+                      + Screenshot
                     </button>
                   )}
                   <input
@@ -408,7 +408,7 @@ export function ProporWebsitePage() {
                           ),
                         }));
                       } catch (err) {
-                        setUploadError(err instanceof Error ? err.message : 'Falha ao enviar imagem.');
+                        setUploadError(err instanceof Error ? err.message : 'Falha ao enviar screenshot.');
                       } finally {
                         setUploadingMetaIndex(null);
                         e.target.value = '';

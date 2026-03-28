@@ -277,13 +277,13 @@ export function WebsitePage() {
 
         {images && images.length > 0 && (
           <div className="card p-4 space-y-3">
-            <h3 className="text-lg font-semibold text-throne-900">Fotos do projeto</h3>
+            <h3 className="text-lg font-semibold text-throne-900">Screenshots</h3>
             <div className="grid gap-3 sm:grid-cols-2">
               {images.map((img, idx) => (
                 <img
                   key={`${img}-${idx}`}
                   src={img}
-                  alt={`Imagem ${idx + 1} de ${website.name}`}
+                  alt={`Screenshot ${idx + 1} de ${website.name}`}
                   className="w-full rounded-lg border border-throne-100 object-cover"
                 />
               ))}
