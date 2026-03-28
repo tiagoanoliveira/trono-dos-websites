@@ -39,7 +39,7 @@ export function WebsitePage() {
   const isOpenSource = metadata?.is_open_source;
   const sourceUrl = metadata?.source_url;
   const images = metadata?.images;
-  const canSeeBreakdown =
+  const canSeeVoteBreakdown =
     user?.role === 'admin' || (!!website?.submitted_by && website.submitted_by === user?.id);
 
   const voteMutation = useMutation({
@@ -302,7 +302,7 @@ export function WebsitePage() {
           errorMessage={addCommentMutation.error instanceof Error ? addCommentMutation.error.message : ''}
           onVote={(commentId, value) => voteCommentMutation.mutate({ commentId, value })}
           voting={voteCommentMutation.isPending}
-          canSeeBreakdown={canSeeBreakdown}
+           canSeeBreakdown={canSeeVoteBreakdown}
         />
 
         {/* Related websites */}
