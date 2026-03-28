@@ -148,6 +148,8 @@ export interface ApiMeta {
   perPage?: number;
   total?: number;
   totalPages?: number;
+  hasNextPage?: boolean;
+  hasPrevPage?: boolean;
 }
 
 export interface PaginationParams {
