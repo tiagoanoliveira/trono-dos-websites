@@ -270,8 +270,7 @@ export function CategoryPage() {
                 website={site}
                 onVote={(direction) => {
                   const current = site.user_vote ?? 0;
-                  const next: -1 | 0 | 1 =
-                    direction === 'up' ? (current === 1 ? 0 : 1) : current === -1 ? 0 : -1;
+                  const next = getNextVoteValue(current, direction);
                   voteMutation.mutate({ websiteId: site.id, value: next });
                 }}
                 voting={voteMutation.isPending && voteMutation.variables?.websiteId === site.id}
@@ -308,6 +307,11 @@ export function CategoryPage() {
       </div>
     </div>
   );
+}
+
+function getNextVoteValue(current: number, direction: 'up' | 'down'): -1 | 0 | 1 {
+  if (direction === 'up') return current === 1 ? 0 : 1;
+  return current === -1 ? 0 : -1;
 }
 
 function WebsiteListRow({

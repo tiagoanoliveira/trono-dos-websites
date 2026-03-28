@@ -587,16 +587,19 @@ function CommentItem({
           <p className="text-throne-700 leading-relaxed">{comment.content}</p>
           <div className="mt-2 flex items-center gap-3 text-sm text-throne-500 flex-wrap">
             <div className="flex items-center gap-2">
+              <span className="text-xs text-throne-400">score: {comment.score}</span>
               <button
                 className={cn(
                   'inline-flex items-center gap-1 rounded-full border border-throne-200 px-2 py-1',
-                  comment.user_vote === 1 && 'border-crown-400 text-crown-700',
+                  (comment.user_vote ?? 0) === 1 && 'border-crown-400 text-crown-700',
                   voting && 'opacity-60 cursor-not-allowed',
                 )}
-                onClick={() => (isAuthenticated ? onVote(comment.id, comment.user_vote === 1 ? 0 : 1) : onLogin())}
+                onClick={() =>
+                  isAuthenticated ? onVote(comment.id, (comment.user_vote ?? 0) === 1 ? 0 : 1) : onLogin()
+                }
                 disabled={voting}
               >
-                ▲ {comment.score}
+                ▲
               </button>
               <span className="text-xs text-throne-400">
                 {comment.upvotes} ↑ · {comment.downvotes} ↓

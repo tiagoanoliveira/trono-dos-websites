@@ -71,6 +71,7 @@ const ALLOWED_LANGUAGES = [
   'HTML',
   'CSS',
 ];
+const ALLOWED_LANG_SET = new Set(ALLOWED_LANGUAGES.map((lang) => lang.toLowerCase()));
 type WebsiteMetadata = {
   author?: string | null;
   launch_date?: string | null;
@@ -133,8 +134,10 @@ function normalizeWebsiteMetadata(input: unknown): string | null {
       .map((lang) => lang.trim())
       .filter(Boolean)
       .map((lang) => {
-        const match = ALLOWED_LANGUAGES.find((allowed) => allowed.toLowerCase() === lang.toLowerCase());
-        return match ?? null;
+        const lowered = lang.toLowerCase();
+        return ALLOWED_LANG_SET.has(lowered)
+          ? ALLOWED_LANGUAGES.find((allowed) => allowed.toLowerCase() === lowered) ?? null
+          : null;
       })
       .filter((lang): lang is string => Boolean(lang));
     if (langs.length > 0) metadata.languages = langs;
@@ -301,9 +304,7 @@ websitesRouter.post('/', requireAuth, async (c) => {
         if (!Array.isArray(langs) || !langs.every((l) => typeof l === 'string')) {
           return c.json(createError('VALIDATION_ERROR', 'Linguagens devem ser uma lista de strings'), 400);
         }
-        const invalid = (langs as string[]).filter(
-          (lang) => !ALLOWED_LANGUAGES.some((allowed) => allowed.toLowerCase() === lang.toLowerCase()),
-        );
+        const invalid = (langs as string[]).filter((lang) => !ALLOWED_LANG_SET.has(lang.toLowerCase()));
         if (invalid.length > 0) {
           return c.json(
             createError(
@@ -775,6 +776,7 @@ websitesRouter.post('/:id/ratings', requireAuth, async (c) => {
       return c.json(createError('VALIDATION_ERROR', 'Avaliação inválida'), 400);
     }
 
+    // Legacy mapping: 4-5 stars => upvote, 1-2 stars => downvote, 3 stars => neutral/remove vote.
     let value: -1 | 0 | 1 = 0;
     if (score >= 4) value = 1;
     else if (score <= 2) value = -1;
