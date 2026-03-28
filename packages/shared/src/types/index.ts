@@ -44,8 +44,10 @@ export interface Website {
   createdAt: string;
   updatedAt: string;
   // Campos calculados
-  averageRating?: number;
-  totalRatings?: number;
+  upvotes?: number;
+  downvotes?: number;
+  score?: number;
+  userVote?: number | null;
   totalComments?: number;
 }
 

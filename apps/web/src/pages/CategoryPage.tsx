@@ -46,18 +46,19 @@ export function CategoryPage() {
   const { websites, meta, isLoading: websitesLoading } = useWebsites(filters);
 
   const voteMutation = useMutation({
-    mutationFn: async ({ websiteId, score }: { websiteId: string; score: number }) => {
+    mutationFn: async ({ websiteId, value }: { websiteId: string; value: -1 | 0 | 1 }) => {
       const res = await api.post<{
-        avg_rating: number;
-        rating_count: number;
-        user_rating?: number | null;
-      }>(`/websites/${websiteId}/ratings`, { score });
+        upvotes: number;
+        downvotes: number;
+        score: number;
+        user_vote?: number | null;
+      }>(`/websites/${websiteId}/votes`, { value });
 
       if (!res.success || !res.data) {
         throw new Error(res.error?.message ?? 'Erro ao votar');
       }
 
-      return { ...res.data, websiteId, score };
+      return { ...res.data, websiteId };
     },
     onSuccess: (data) => {
       queryClient.setQueryData<PaginatedResponse<Website> | undefined>(['websites', filters], (prev) => {
@@ -68,9 +69,10 @@ export function CategoryPage() {
             site.id === data.websiteId
               ? {
                   ...site,
-                  avg_rating: data.avg_rating,
-                  rating_count: data.rating_count,
-                  user_rating: data.user_rating ?? data.score,
+                  upvotes: data.upvotes,
+                  downvotes: data.downvotes,
+                  score: data.score,
+                  user_vote: data.user_vote ?? 0,
                 }
               : site,
           ),
@@ -266,9 +268,12 @@ export function CategoryPage() {
               <WebsiteListRow
                 key={site.id}
                 website={site}
-                onVote={(direction) =>
-                  voteMutation.mutate({ websiteId: site.id, score: direction === 'up' ? 5 : 1 })
-                }
+                onVote={(direction) => {
+                  const current = site.user_vote ?? 0;
+                  const next: -1 | 0 | 1 =
+                    direction === 'up' ? (current === 1 ? 0 : 1) : current === -1 ? 0 : -1;
+                  voteMutation.mutate({ websiteId: site.id, value: next });
+                }}
                 voting={voteMutation.isPending && voteMutation.variables?.websiteId === site.id}
                 disabled={!isAuthenticated}
               />
@@ -316,12 +321,15 @@ function WebsiteListRow({
   voting: boolean;
   disabled: boolean;
 }) {
-  const votes = calculateVoteBreakdown(website);
   const metadata = website.metadata;
   const launchLabel = formatLaunchDate(metadata?.launch_date, metadata?.launch_precision);
   const languagesLabel = metadata?.languages?.join(', ');
   const isOpenSource = metadata?.is_open_source;
   const sourceUrl = metadata?.source_url;
+  const score = website.score ?? 0;
+  const upvotes = website.upvotes ?? 0;
+  const downvotes = website.downvotes ?? 0;
+  const userVote = website.user_vote ?? 0;
 
   return (
     <div className="flex gap-4 rounded-xl border border-throne-100 bg-white p-4 shadow-sm">
@@ -332,20 +340,20 @@ function WebsiteListRow({
           disabled={disabled || voting}
           className={cn(
             'transition-colors',
-            disabled ? 'text-throne-300 cursor-not-allowed' : 'hover:text-crown-600',
+            disabled ? 'text-throne-300 cursor-not-allowed' : userVote === 1 ? 'text-crown-600' : 'hover:text-crown-600',
           )}
           title={disabled ? 'Entra para votar' : 'Upvote'}
         >
           ▲
         </button>
-        <span className="text-base font-semibold text-throne-900">{votes.score}</span>
+        <span className="text-base font-semibold text-throne-900">{score}</span>
         <button
           type="button"
           onClick={() => onVote('down')}
           disabled={disabled || voting}
           className={cn(
             'transition-colors',
-            disabled ? 'text-throne-300 cursor-not-allowed' : 'hover:text-crown-600',
+            disabled ? 'text-throne-300 cursor-not-allowed' : userVote === -1 ? 'text-crown-600' : 'hover:text-crown-600',
           )}
           title={disabled ? 'Entra para votar' : 'Downvote'}
         >
@@ -429,32 +437,16 @@ function WebsiteListRow({
         <div className="flex flex-wrap gap-4 text-xs text-throne-500">
           <span className="flex items-center gap-1">
             <ArrowUpIcon className="h-3 w-3" />
-            {votes.upvotes} upvotes
+            {upvotes} upvotes
           </span>
           <span className="flex items-center gap-1">
             <ArrowDownIcon className="h-3 w-3" />
-            {votes.downvotes} downvotes
+            {downvotes} downvotes
           </span>
-          <span>⭐ {(website.avg_rating ?? 0).toFixed(1)}</span>
-          <span>{website.rating_count ?? 0} votos</span>
         </div>
       </div>
     </div>
   );
-}
-
-function calculateVoteBreakdown(website: Website) {
-  const total = website.rating_count ?? 0;
-  const avg = website.avg_rating ?? 0;
-  if (!total) return { upvotes: 0, downvotes: 0, score: 0 };
-
-  const estimatedUpvotes = Math.max(0, Math.min(total, Math.round(((avg - 1) / 4) * total)));
-  const downvotes = Math.max(0, total - estimatedUpvotes);
-  return {
-    upvotes: estimatedUpvotes,
-    downvotes,
-    score: estimatedUpvotes - downvotes,
-  };
 }
 
 function formatLaunchDate(

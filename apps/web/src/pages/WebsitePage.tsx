@@ -4,14 +4,13 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDate, getInitials, cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/Spinner';
 import { Badge } from '@/components/ui/Badge';
-import { StarRating } from '@/components/ui/StarRating';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { WebsiteCard } from '@/components/features/WebsiteCard';
 import { useWebsiteById, useWebsites } from '@/hooks/useWebsites';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
 import type { Comment, Website } from '@/types';
-import { useComments, useAddComment } from '@/hooks/useComments';
+import { useComments, useAddComment, useVoteComment } from '@/hooks/useComments';
 
 export function WebsitePage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -19,10 +18,11 @@ export function WebsitePage() {
   const { isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [userRating, setUserRating] = useState<number>(0);
+  const [userVote, setUserVote] = useState<number>(0);
 
   const { comments, isLoading: commentsLoading } = useComments(id);
   const addCommentMutation = useAddComment(id);
+  const voteCommentMutation = useVoteComment(id);
 
   const { websites: relatedWebsites, isLoading: relatedLoading } = useWebsites({
     category_id: website?.category_id,
@@ -30,8 +30,8 @@ export function WebsitePage() {
   });
 
   useEffect(() => {
-    setUserRating(website?.user_rating ?? 0);
-  }, [website?.user_rating]);
+    setUserVote(website?.user_vote ?? 0);
+  }, [website?.user_vote]);
 
   const metadata = website?.metadata ?? null;
   const launchLabel = formatLaunchDate(metadata?.launch_date, metadata?.launch_precision);
@@ -40,26 +40,27 @@ export function WebsitePage() {
   const sourceUrl = metadata?.source_url;
   const images = metadata?.images;
 
-  const ratingMutation = useMutation({
-    mutationFn: async (score: number) => {
-      const res = await api.post<{ avg_rating: number; rating_count: number; user_rating?: number | null }>(
-        `/websites/${id}/ratings`,
-        { score },
+  const voteMutation = useMutation({
+    mutationFn: async (value: -1 | 0 | 1) => {
+      const res = await api.post<{ upvotes: number; downvotes: number; score: number; user_vote?: number | null }>(
+        `/websites/${id}/votes`,
+        { value },
       );
       if (!res.success || !res.data) {
-        throw new Error(res.error?.message ?? 'Erro ao guardar avaliação');
+        throw new Error(res.error?.message ?? 'Erro ao guardar voto');
       }
-      return { ...res.data, score };
+      return res.data;
     },
     onSuccess: (data) => {
-      setUserRating(data.user_rating ?? data.score);
+      setUserVote(data.user_vote ?? 0);
       queryClient.setQueryData<Website | undefined>(['websites', id], (prev) =>
         prev
           ? {
               ...prev,
-              avg_rating: data.avg_rating,
-              rating_count: data.rating_count,
-              user_rating: data.user_rating ?? data.score,
+              upvotes: data.upvotes,
+              downvotes: data.downvotes,
+              score: data.score,
+              user_vote: data.user_vote ?? 0,
             }
           : prev,
       );
@@ -163,13 +164,13 @@ export function WebsitePage() {
                 <p className="text-throne-600 leading-relaxed">{website.description}</p>
               )}
 
-              {/* Rating */}
-              <StarRating
-                score={website.avg_rating ?? 0}
-                count={website.rating_count ?? 0}
-                size="md"
-                showCount
-              />
+              {/* Score */}
+              <div className="inline-flex items-center gap-2 rounded-full bg-throne-50 px-3 py-2 text-sm text-throne-700">
+                <span className="font-semibold text-throne-900">{website.score ?? 0}</span>
+                <span className="text-throne-400">
+                  {website.upvotes ?? 0} ↑ · {website.downvotes ?? 0} ↓
+                </span>
+              </div>
 
               {/* Meta */}
               <div className="flex items-center gap-4 text-sm text-throne-400 flex-wrap">
@@ -261,13 +262,14 @@ export function WebsitePage() {
           </div>
         )}
 
-        <RatingSection
-          avgRating={website.avg_rating ?? 0}
-          ratingCount={website.rating_count ?? 0}
-          userRating={userRating}
+        <VoteSection
+          upvotes={website.upvotes ?? 0}
+          downvotes={website.downvotes ?? 0}
+          score={website.score ?? 0}
+          userVote={userVote}
           isAuthenticated={isAuthenticated}
-          isSubmitting={ratingMutation.isPending}
-          onRate={(score) => ratingMutation.mutate(score)}
+          isSubmitting={voteMutation.isPending}
+          onVote={(value) => voteMutation.mutate(value)}
           onRequireLogin={() => navigate('/entrar')}
         />
 
@@ -280,6 +282,8 @@ export function WebsitePage() {
           onSubmit={async (payload) => addCommentMutation.mutateAsync(payload)}
           isSubmitting={addCommentMutation.isPending}
           errorMessage={addCommentMutation.error instanceof Error ? addCommentMutation.error.message : ''}
+          onVote={(commentId, value) => voteCommentMutation.mutate({ commentId, value })}
+          voting={voteCommentMutation.isPending}
         />
 
         {/* Related websites */}
@@ -315,68 +319,73 @@ export function WebsitePage() {
   );
 }
 
-function RatingSection({
-  avgRating,
-  ratingCount,
-  userRating,
+function VoteSection({
+  upvotes,
+  downvotes,
+  score,
+  userVote,
   isAuthenticated,
   isSubmitting,
-  onRate,
+  onVote,
   onRequireLogin,
 }: {
-  avgRating: number;
-  ratingCount: number;
-  userRating: number;
+  upvotes: number;
+  downvotes: number;
+  score: number;
+  userVote: number;
   isAuthenticated: boolean;
   isSubmitting: boolean;
-  onRate: (score: number) => void;
+  onVote: (value: -1 | 0 | 1) => void;
   onRequireLogin: () => void;
 }) {
-  const [hovered, setHovered] = useState<number | null>(null);
-  const displaySelected = hovered ?? userRating;
+  const toggleUp = () => onVote(userVote === 1 ? 0 : 1);
+  const toggleDown = () => onVote(userVote === -1 ? 0 : -1);
 
   return (
     <div className="card p-6 space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-lg font-semibold text-throne-800 flex items-center gap-2">
-            <span>⭐</span> Avaliações
+            <span>🔥</span> Votos da comunidade
           </h2>
           <p className="text-sm text-throne-500">
-            {ratingCount > 0 ? `Média baseada em ${ratingCount} avaliação${ratingCount > 1 ? 's' : ''}.` : 'Sê o primeiro a avaliar este website.'}
+            {upvotes + downvotes > 0 ? `${upvotes} up · ${downvotes} down` : 'Sê o primeiro a votar neste website.'}
           </p>
         </div>
-        <StarRating score={avgRating} count={ratingCount} size="md" />
+        <div className="inline-flex items-center gap-2 rounded-full bg-throne-50 px-3 py-2 text-sm text-throne-700">
+          <span className="font-semibold text-throne-900">{score}</span>
+          <span className="text-throne-400">pontuação</span>
+        </div>
       </div>
 
       {isAuthenticated ? (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            {[1, 2, 3, 4, 5].map((value) => (
-              <button
-                key={value}
-                type="button"
-                className="p-1"
-                onMouseEnter={() => setHovered(value)}
-                onMouseLeave={() => setHovered(null)}
-                onFocus={() => setHovered(value)}
-                onBlur={() => setHovered(null)}
-                onClick={() => onRate(value)}
-                disabled={isSubmitting}
-                aria-label={`Avaliar com ${value} estrelas`}
-              >
-                <StarSelectableIcon filled={value <= displaySelected} />
-              </button>
-            ))}
-          </div>
-          <p className="text-sm text-throne-600">
-            {userRating > 0 ? `A tua avaliação: ${userRating}/5` : 'Escolhe uma classificação para partilhares a tua opinião.'}
-          </p>
-          {isSubmitting && <p className="text-xs text-throne-400">A guardar avaliação…</p>}
+        <div className="flex items-center gap-3">
+          <button
+            className={cn(
+              'btn-secondary flex items-center gap-2',
+              userVote === 1 && 'border-crown-500 text-crown-700',
+              isSubmitting && 'opacity-60 cursor-not-allowed',
+            )}
+            onClick={toggleUp}
+            disabled={isSubmitting}
+          >
+            ▲ Upvote
+          </button>
+          <button
+            className={cn(
+              'btn-secondary flex items-center gap-2',
+              userVote === -1 && 'border-red-200 text-red-700',
+              isSubmitting && 'opacity-60 cursor-not-allowed',
+            )}
+            onClick={toggleDown}
+            disabled={isSubmitting}
+          >
+            ▼ Downvote
+          </button>
         </div>
       ) : (
         <div className="flex items-center gap-3 text-sm text-throne-600">
-          <span>Inicia sessão para avaliar este website.</span>
+          <span>Inicia sessão para votar neste website.</span>
           <button className="btn-secondary px-3 py-1" onClick={onRequireLogin}>
             Entrar
           </button>
@@ -395,6 +404,8 @@ function CommentsSection({
   onSubmit,
   isSubmitting,
   errorMessage,
+  onVote,
+  voting,
 }: {
   comments: Comment[];
   isLoading: boolean;
@@ -404,6 +415,8 @@ function CommentsSection({
   onSubmit: (payload: { content: string; parentId?: string | null; kind?: string }) => Promise<unknown>;
   isSubmitting: boolean;
   errorMessage?: string;
+  onVote: (commentId: string, value: -1 | 0 | 1) => void;
+  voting: boolean;
 }) {
   const [content, setContent] = useState('');
   const [formError, setFormError] = useState('');
@@ -443,34 +456,40 @@ function CommentsSection({
       {isAuthenticated ? (
         <div className="space-y-2">
           <label className="label">Partilha a tua opinião</label>
-          <textarea
-            className="input min-h-[120px]"
-            placeholder="Escreve algo útil para a comunidade..."
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            maxLength={1000}
-          />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <label className="label">Tipo de comentário</label>
-              <select className="input" value={kind} onChange={(e) => setKind(e.target.value)}>
-                <option value="opinion">Opinião</option>
-                <option value="suggestion">Sugestão</option>
-                <option value="issue">Erro/bug</option>
-                <option value="praise">Elogio</option>
-                <option value="other">Outro</option>
-              </select>
+          <div className="rounded-xl border border-throne-200 bg-white shadow-sm">
+            <textarea
+              className="input min-h-[120px] border-none focus:ring-0"
+              placeholder="Escreve algo útil para a comunidade..."
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              maxLength={1000}
+            />
+            <div className="flex items-center justify-between gap-3 border-t border-throne-100 px-3 py-2 flex-wrap">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-throne-500">Tag:</span>
+                <select
+                  className="input h-9 w-36"
+                  value={kind}
+                  onChange={(e) => setKind(e.target.value)}
+                >
+                  <option value="opinion">Opinião</option>
+                  <option value="suggestion">Sugestão</option>
+                  <option value="issue">Erro/bug</option>
+                  <option value="praise">Elogio</option>
+                  <option value="other">Outro</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-throne-400">{content.length}/1000</span>
+                <button
+                  className={cn('btn-primary', isSubmitting && 'opacity-60 cursor-not-allowed')}
+                  onClick={handleSubmit}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'A enviar…' : 'Publicar comentário'}
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              className={cn('btn-primary', isSubmitting && 'opacity-60 cursor-not-allowed')}
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'A enviar…' : 'Publicar comentário'}
-            </button>
-            <span className="text-xs text-throne-400">{content.length}/1000</span>
           </div>
           {formError && <p className="text-sm text-red-600">{formError}</p>}
           {errorMessage && !formError && <p className="text-sm text-red-600">{errorMessage}</p>}
@@ -505,6 +524,8 @@ function CommentsSection({
               onLogin={onLogin}
               onSubmit={onSubmit}
               isSubmitting={isSubmitting}
+              onVote={onVote}
+              voting={voting}
             />
           ))
         )}
@@ -519,16 +540,19 @@ function CommentItem({
   onLogin,
   onSubmit,
   isSubmitting,
+  onVote,
+  voting,
 }: {
   comment: Comment;
   isAuthenticated: boolean;
   onLogin: () => void;
   onSubmit: (payload: { content: string; parentId?: string | null; kind?: string }) => Promise<unknown>;
   isSubmitting: boolean;
+  onVote: (commentId: string, value: -1 | 0 | 1) => void;
+  voting: boolean;
 }) {
   const [replying, setReplying] = useState(false);
   const [replyText, setReplyText] = useState('');
-  const [replyKind, setReplyKind] = useState('opinion');
   const [error, setError] = useState('');
 
   const handleReply = async () => {
@@ -538,9 +562,8 @@ function CommentItem({
       return;
     }
     try {
-      await onSubmit({ content: replyText.trim(), parentId: comment.id, kind: replyKind });
+      await onSubmit({ content: replyText.trim(), parentId: comment.id });
       setReplyText('');
-      setReplyKind('opinion');
       setReplying(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível enviar a resposta.');
@@ -562,7 +585,23 @@ function CommentItem({
             )}
           </div>
           <p className="text-throne-700 leading-relaxed">{comment.content}</p>
-          <div className="mt-2 flex items-center gap-3 text-sm text-throne-500">
+          <div className="mt-2 flex items-center gap-3 text-sm text-throne-500 flex-wrap">
+            <div className="flex items-center gap-2">
+              <button
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full border border-throne-200 px-2 py-1',
+                  comment.user_vote === 1 && 'border-crown-400 text-crown-700',
+                  voting && 'opacity-60 cursor-not-allowed',
+                )}
+                onClick={() => (isAuthenticated ? onVote(comment.id, comment.user_vote === 1 ? 0 : 1) : onLogin())}
+                disabled={voting}
+              >
+                ▲ {comment.score}
+              </button>
+              <span className="text-xs text-throne-400">
+                {comment.upvotes} ↑ · {comment.downvotes} ↓
+              </span>
+            </div>
             {isAuthenticated ? (
               <button className="link" onClick={() => setReplying((v) => !v)}>
                 {replying ? 'Cancelar' : 'Responder'}
@@ -581,18 +620,6 @@ function CommentItem({
                 onChange={(e) => setReplyText(e.target.value)}
                 placeholder="Responder a este comentário..."
               />
-              <div className="grid gap-2 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <label className="label">Tipo</label>
-                  <select className="input" value={replyKind} onChange={(e) => setReplyKind(e.target.value)}>
-                    <option value="opinion">Opinião</option>
-                    <option value="suggestion">Sugestão</option>
-                    <option value="issue">Erro/bug</option>
-                    <option value="praise">Elogio</option>
-                    <option value="other">Outro</option>
-                  </select>
-                </div>
-              </div>
               <div className="flex items-center gap-2">
                 <button
                   className={cn('btn-primary', isSubmitting && 'opacity-60 cursor-not-allowed')}
@@ -610,20 +637,22 @@ function CommentItem({
           )}
         </div>
       </div>
-      {comment.replies && comment.replies.length > 0 && (
-        <div className="ml-10 border-l border-throne-100 pl-4 space-y-3">
-          {comment.replies.map((reply) => (
-            <CommentItem
-              key={reply.id}
-              comment={reply}
-              isAuthenticated={isAuthenticated}
-              onLogin={onLogin}
-              onSubmit={onSubmit}
-              isSubmitting={isSubmitting}
-            />
-          ))}
-        </div>
-      )}
+        {comment.replies && comment.replies.length > 0 && (
+          <div className="ml-10 border-l border-throne-100 pl-4 space-y-3">
+            {comment.replies.map((reply) => (
+              <CommentItem
+                key={reply.id}
+                comment={reply}
+                isAuthenticated={isAuthenticated}
+                onLogin={onLogin}
+                onSubmit={onSubmit}
+                isSubmitting={isSubmitting}
+                onVote={onVote}
+                voting={voting}
+              />
+            ))}
+          </div>
+        )}
     </div>
   );
 }
@@ -696,19 +725,6 @@ function UserIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14c-4.418 0-8 1.79-8 4v2h16v-2c0-2.21-3.582-4-8-4z" />
-    </svg>
-  );
-}
-
-function StarSelectableIcon({ filled }: { filled: boolean }) {
-  return (
-    <svg
-      className={filled ? 'h-6 w-6 text-crown-500' : 'h-6 w-6 text-throne-300'}
-      viewBox="0 0 20 20"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
     </svg>
   );
 }

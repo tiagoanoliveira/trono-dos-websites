@@ -20,9 +20,10 @@ type WebsiteRow = {
   updated_at: string;
   metadata?: string | null;
   owner_name?: string | null;
-  avg_rating: number | null;
-  rating_count: number;
-  user_rating?: number | null;
+  upvotes?: number | null;
+  downvotes?: number | null;
+  score?: number | null;
+  user_vote?: number | null;
   comment_count?: number;
 };
 
@@ -31,11 +32,11 @@ type CountRow = { total: number };
 type SortOption = 'rating' | 'recent' | 'featured' | 'date' | 'popularity';
 
 const SORT_MAP: Record<SortOption, string> = {
-  rating: 'avg_rating DESC NULLS LAST, w.created_at DESC',
+  rating: 'score DESC NULLS LAST, w.created_at DESC',
   recent: 'w.created_at DESC',
   date: 'w.created_at DESC',
-  popularity: 'COALESCE(r.rating_count, 0) DESC, avg_rating DESC NULLS LAST, w.created_at DESC',
-  featured: 'w.featured DESC, avg_rating DESC NULLS LAST, w.created_at DESC',
+  popularity: 'COALESCE(wv.score, 0) DESC, COALESCE(wv.upvotes,0) DESC, w.created_at DESC',
+  featured: 'w.featured DESC, COALESCE(wv.score,0) DESC, w.created_at DESC',
 };
 
 function visibleStatusCondition(alias?: string) {
@@ -50,6 +51,26 @@ const MIN_RATING = 1;
 const MAX_RATING = 5;
 const MIN_COMMENT_LENGTH = 3;
 const MAX_COMMENT_LENGTH = 1000;
+const ALLOWED_LANGUAGES = [
+  'JavaScript',
+  'TypeScript',
+  'Python',
+  'Java',
+  'C#',
+  'C++',
+  'Go',
+  'Rust',
+  'PHP',
+  'Ruby',
+  'Swift',
+  'Kotlin',
+  'Dart',
+  'Elixir',
+  'Scala',
+  'SQL',
+  'HTML',
+  'CSS',
+];
 type WebsiteMetadata = {
   author?: string | null;
   launch_date?: string | null;
@@ -110,7 +131,12 @@ function normalizeWebsiteMetadata(input: unknown): string | null {
     const langs = data.languages
       .filter((lang) => typeof lang === 'string')
       .map((lang) => lang.trim())
-      .filter(Boolean);
+      .filter(Boolean)
+      .map((lang) => {
+        const match = ALLOWED_LANGUAGES.find((allowed) => allowed.toLowerCase() === lang.toLowerCase());
+        return match ?? null;
+      })
+      .filter((lang): lang is string => Boolean(lang));
     if (langs.length > 0) metadata.languages = langs;
   }
 
@@ -179,6 +205,10 @@ type CommentRow = {
   kind?: string | null;
   user_name: string;
   user_avatar: string | null;
+  upvotes?: number | null;
+  downvotes?: number | null;
+  score?: number | null;
+  user_vote?: number | null;
 };
 
 type CommentNode = {
@@ -196,6 +226,10 @@ type CommentNode = {
     name: string;
     avatar_url: string | null;
   };
+  upvotes: number;
+  downvotes: number;
+  score: number;
+  user_vote?: number | null;
   replies: CommentNode[];
 };
 
@@ -259,6 +293,27 @@ websitesRouter.post('/', requireAuth, async (c) => {
         return c.json(createError('VALIDATION_ERROR', 'Descrição inválida'), 400);
       }
       normalizedDescription = description.trim();
+    }
+
+    if (metadata && typeof metadata === 'object' && 'languages' in (metadata as Record<string, unknown>)) {
+      const langs = (metadata as { languages?: unknown }).languages;
+      if (langs !== undefined) {
+        if (!Array.isArray(langs) || !langs.every((l) => typeof l === 'string')) {
+          return c.json(createError('VALIDATION_ERROR', 'Linguagens devem ser uma lista de strings'), 400);
+        }
+        const invalid = (langs as string[]).filter(
+          (lang) => !ALLOWED_LANGUAGES.some((allowed) => allowed.toLowerCase() === lang.toLowerCase()),
+        );
+        if (invalid.length > 0) {
+          return c.json(
+            createError(
+              'VALIDATION_ERROR',
+              `Linguagens inválidas: ${invalid.join(', ')}. Utilize apenas valores da lista permitida.`,
+            ),
+            400,
+          );
+        }
+      }
     }
 
     const normalizedMetadata = normalizeWebsiteMetadata(metadata);
@@ -372,10 +427,11 @@ websitesRouter.get('/mine', requireAuth, async (c) => {
   }
 });
 
-websitesRouter.get('/', async (c) => {
+websitesRouter.get('/', optionalAuth, async (c) => {
   try {
     const url = new URL(c.req.url);
     const { page, perPage, offset } = getPaginationParams(url);
+    const userId = c.get('userId');
 
     const categoryId = url.searchParams.get('category_id');
     const includeDescendants = url.searchParams.get('include_descendants') === 'true';
@@ -429,34 +485,42 @@ websitesRouter.get('/', async (c) => {
       LEFT JOIN categories cat ON cat.id = w.category_id
       LEFT JOIN users u ON u.id = w.submitted_by
       LEFT JOIN (
-        SELECT website_id, AVG(CAST(score AS REAL)) AS avg_rating, COUNT(*) AS rating_count
-        FROM ratings
+        SELECT
+          website_id,
+          SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END) AS upvotes,
+          SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END) AS downvotes,
+          SUM(value) AS score
+        FROM website_votes
         GROUP BY website_id
-      ) r ON r.website_id = w.id
+      ) wv ON wv.website_id = w.id
+      ${userId ? 'LEFT JOIN website_votes uv ON uv.website_id = w.id AND uv.user_id = ?' : ''}
       WHERE ${whereClause}
     `;
 
     const countRow = await c.env.DB.prepare(`SELECT COUNT(*) AS total ${baseQuery}`)
-      .bind(...bindings)
+      .bind(...(userId ? [userId, ...bindings] : bindings))
       .first<CountRow>();
 
     const total = countRow?.total ?? 0;
 
     const executeWithColumns = async (includeMetadata: boolean) => {
       const metadataSelect = includeMetadata ? 'w.metadata,' : '';
-      return c.env.DB.prepare(
+       return c.env.DB.prepare(
         `SELECT
            w.id, w.name, w.url, w.description, w.logo_url, w.screenshot_url,
            w.category_id, cat.name AS category_name, cat.slug AS category_slug,
            w.status, w.featured, w.created_at, w.updated_at,
            ${metadataSelect}
-           r.avg_rating, COALESCE(r.rating_count, 0) AS rating_count,
+           COALESCE(wv.upvotes, 0) AS upvotes,
+           COALESCE(wv.downvotes, 0) AS downvotes,
+           COALESCE(wv.score, 0) AS score,
+           ${userId ? 'uv.value AS user_vote' : 'NULL AS user_vote'},
            u.name AS owner_name
          ${baseQuery}
          ORDER BY ${orderClause}
          LIMIT ? OFFSET ?`,
       )
-        .bind(...bindings, perPage, offset)
+        .bind(...(userId ? [userId, ...bindings, perPage, offset] : [...bindings, perPage, offset]))
         .all<WebsiteRow>()
         .then((r) => r.results);
     };
@@ -476,6 +540,9 @@ websitesRouter.get('/', async (c) => {
       featured: Boolean(row.featured),
       metadata: parseMetadata(row.metadata),
       owner_name: row.owner_name ?? null,
+      upvotes: row.upvotes ?? 0,
+      downvotes: row.downvotes ?? 0,
+      score: row.score ?? 0,
     }));
 
     if (c.env.DEBUG_LOGS === 'true') {
@@ -498,22 +565,31 @@ websitesRouter.get('/:id', optionalAuth, async (c) => {
   try {
     const { id } = c.req.param();
     const userId = c.get('userId');
-    const selectBase = `
+const selectBase = `
       SELECT
          w.id, w.name, w.url, w.description, w.logo_url, w.screenshot_url,
          w.category_id, cat.name AS category_name, cat.slug AS category_slug,
          w.status, w.featured, w.created_at, w.updated_at, w.metadata,
-         AVG(CAST(r.score AS REAL)) AS avg_rating,
-         COALESCE(COUNT(r.id), 0) AS rating_count,
+         COALESCE(wv.upvotes,0) AS upvotes,
+         COALESCE(wv.downvotes,0) AS downvotes,
+         COALESCE(wv.score,0) AS score,
          COALESCE(cmt.comment_count, 0) AS comment_count,
          u.name AS owner_name
-    `;
+`;
 
-    const joinsBase = `
+const joinsBase = `
        FROM websites w
        LEFT JOIN categories cat ON cat.id = w.category_id
        LEFT JOIN users u ON u.id = w.submitted_by
-       LEFT JOIN ratings r ON r.website_id = w.id
+       LEFT JOIN (
+         SELECT
+           website_id,
+           SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END) AS upvotes,
+           SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END) AS downvotes,
+           SUM(value) AS score
+         FROM website_votes
+         GROUP BY website_id
+       ) wv ON wv.website_id = w.id
        LEFT JOIN (
          SELECT website_id, COUNT(*) AS comment_count
          FROM comments
@@ -536,9 +612,9 @@ websitesRouter.get('/:id', optionalAuth, async (c) => {
       if (userId) {
         return c.env.DB.prepare(
           `${selectWithMeta},
-           ur.score AS user_rating
+           ur.value AS user_vote
            ${joinsBase}
-           LEFT JOIN ratings ur ON ur.website_id = w.id AND ur.user_id = ?
+           LEFT JOIN website_votes ur ON ur.website_id = w.id AND ur.user_id = ?
            ${whereClause}`,
         )
           .bind(userId, id)
@@ -547,7 +623,7 @@ websitesRouter.get('/:id', optionalAuth, async (c) => {
 
       return c.env.DB.prepare(
         `${selectWithMeta},
-         NULL AS user_rating
+         NULL AS user_vote
          ${joinsBase}
          ${whereClause}`,
       )
@@ -582,6 +658,9 @@ websitesRouter.get('/:id', optionalAuth, async (c) => {
         ...website,
         featured: Boolean(website.featured),
         metadata: parseMetadata(website.metadata),
+        upvotes: website.upvotes ?? 0,
+        downvotes: website.downvotes ?? 0,
+        score: website.score ?? 0,
       }),
     );
   } catch (err) {
@@ -590,6 +669,85 @@ websitesRouter.get('/:id', optionalAuth, async (c) => {
   }
 });
 
+async function upsertWebsiteVote(
+  db: Env['DB'],
+  websiteId: string,
+  userId: string,
+  value: -1 | 0 | 1,
+) {
+  if (value === 0) {
+    await db.prepare('DELETE FROM website_votes WHERE website_id = ? AND user_id = ?')
+      .bind(websiteId, userId)
+      .run();
+  } else {
+    await db.prepare(
+      `INSERT INTO website_votes (id, website_id, user_id, value)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(website_id, user_id) DO UPDATE SET value = excluded.value, created_at = CURRENT_TIMESTAMP`,
+    )
+      .bind(generateId(), websiteId, userId, value)
+      .run();
+  }
+
+  const summary = await db.prepare(
+    `SELECT
+       COALESCE(SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END), 0) AS upvotes,
+       COALESCE(SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END), 0) AS downvotes,
+       COALESCE(SUM(value), 0) AS score,
+       MAX(CASE WHEN user_id = ? THEN value END) AS user_vote
+     FROM website_votes
+     WHERE website_id = ?`,
+  )
+    .bind(userId, websiteId)
+    .first<{ upvotes: number; downvotes: number; score: number; user_vote: number | null }>();
+
+  return summary ?? { upvotes: 0, downvotes: 0, score: 0, user_vote: value };
+}
+
+websitesRouter.post('/:id/votes', requireAuth, async (c) => {
+  try {
+    const { id } = c.req.param();
+    const userId = c.get('userId');
+
+    const exists = await c.env.DB.prepare(
+      `SELECT id FROM websites WHERE id = ? AND ${VISIBLE_STATUS_CONDITION_NO_ALIAS}`,
+    )
+      .bind(id)
+      .first<{ id: string }>();
+
+    if (!exists) {
+      return c.json(createError('NOT_FOUND', 'Website não encontrado'), 404);
+    }
+
+    let body: { value?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
+    }
+
+    const { value } = body;
+    if (value !== 1 && value !== -1 && value !== 0) {
+      return c.json(createError('VALIDATION_ERROR', 'Voto inválido'), 400);
+    }
+
+    const summary = await upsertWebsiteVote(c.env.DB, id, userId, value);
+
+    return c.json(
+      createSuccess({
+        upvotes: summary.upvotes,
+        downvotes: summary.downvotes,
+        score: summary.score,
+        user_vote: summary.user_vote ?? value,
+      }),
+    );
+  } catch (err) {
+    console.error('[websites POST /:id/votes]', err);
+    return c.json(createError('INTERNAL_ERROR', 'Não foi possível registar o voto'), 500);
+  }
+});
+
+// Legacy support: map star ratings to votes to avoid breaking old clients.
 websitesRouter.post('/:id/ratings', requireAuth, async (c) => {
   try {
     const { id } = c.req.param();
@@ -613,47 +771,26 @@ websitesRouter.post('/:id/ratings', requireAuth, async (c) => {
     }
 
     const { score } = body;
-    if (
-      typeof score !== 'number' ||
-      !Number.isInteger(score) ||
-      score < MIN_RATING ||
-      score > MAX_RATING
-    ) {
-      return c.json(
-        createError('VALIDATION_ERROR', `Avaliação deve ser um número entre ${MIN_RATING} e ${MAX_RATING}`),
-        400,
-      );
+    if (typeof score !== 'number') {
+      return c.json(createError('VALIDATION_ERROR', 'Avaliação inválida'), 400);
     }
 
-    await c.env.DB.prepare(
-      `INSERT INTO ratings (id, website_id, user_id, score)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(website_id, user_id) DO UPDATE SET score = excluded.score, created_at = CURRENT_TIMESTAMP`,
-    )
-      .bind(generateId(), id, userId, score)
-      .run();
+    let value: -1 | 0 | 1 = 0;
+    if (score >= 4) value = 1;
+    else if (score <= 2) value = -1;
 
-    const summary = await c.env.DB.prepare(
-      `SELECT
-         AVG(CAST(score AS REAL)) AS avg_rating,
-         COUNT(*) AS rating_count,
-         MAX(CASE WHEN user_id = ? THEN score END) AS user_rating
-       FROM ratings
-       WHERE website_id = ?`,
-    )
-      .bind(userId, id)
-      .first<{ avg_rating: number | null; rating_count: number; user_rating: number | null }>();
-
+    const summary = await upsertWebsiteVote(c.env.DB, id, userId, value);
     return c.json(
       createSuccess({
-        avg_rating: summary?.avg_rating ?? 0,
-        rating_count: summary?.rating_count ?? 0,
-        user_rating: summary?.user_rating ?? score,
+        upvotes: summary.upvotes,
+        downvotes: summary.downvotes,
+        score: summary.score,
+        user_vote: summary.user_vote ?? value,
       }),
     );
   } catch (err) {
     console.error('[websites POST /:id/ratings]', err);
-    return c.json(createError('INTERNAL_ERROR', 'Não foi possível guardar a avaliação'), 500);
+    return c.json(createError('INTERNAL_ERROR', 'Não foi possível registar o voto'), 500);
   }
 });
 
@@ -664,16 +801,31 @@ websitesRouter.get('/:id/comments', optionalAuth, async (c) => {
     const sortParam = url.searchParams.get('sort');
     const sort: CommentSort = sortParam === 'oldest' ? 'oldest' : 'newest';
     const orderClause = COMMENT_SORT_ORDER[sort];
+    const userId = c.get('userId');
 
     const rows = await c.env.DB.prepare(
       `SELECT
-         c.*, u.name AS user_name, u.avatar_url AS user_avatar
+         c.*, u.name AS user_name, u.avatar_url AS user_avatar,
+         COALESCE(v.upvotes, 0) AS upvotes,
+         COALESCE(v.downvotes, 0) AS downvotes,
+         COALESCE(v.score, 0) AS score,
+         ${userId ? 'uv.value AS user_vote' : 'NULL AS user_vote'}
        FROM comments c
        JOIN users u ON u.id = c.user_id
+       LEFT JOIN (
+         SELECT
+           comment_id,
+           SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END) AS upvotes,
+           SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END) AS downvotes,
+           SUM(value) AS score
+         FROM comment_votes
+         GROUP BY comment_id
+       ) v ON v.comment_id = c.id
+       ${userId ? 'LEFT JOIN comment_votes uv ON uv.comment_id = c.id AND uv.user_id = ?' : ''}
        WHERE c.website_id = ? AND c.status = 'visible'
        ORDER BY ${orderClause}`,
     )
-      .bind(id)
+      .bind(...(userId ? [userId, id] : [id]))
       .all<CommentRow>()
       .then((r) => r.results);
 
@@ -692,6 +844,10 @@ websitesRouter.get('/:id/comments', optionalAuth, async (c) => {
         name: row.user_name,
         avatar_url: row.user_avatar,
       },
+      upvotes: row.upvotes ?? 0,
+      downvotes: row.downvotes ?? 0,
+      score: row.score ?? 0,
+      user_vote: row.user_vote ?? null,
       replies: [],
     }));
 
@@ -811,6 +967,10 @@ websitesRouter.post('/:id/comments', requireAuth, async (c) => {
         name: inserted.user_name,
         avatar_url: inserted.user_avatar,
       },
+      upvotes: 0,
+      downvotes: 0,
+      score: 0,
+      user_vote: 0,
       replies: [],
     };
 
@@ -818,5 +978,63 @@ websitesRouter.post('/:id/comments', requireAuth, async (c) => {
   } catch (err) {
     console.error('[websites POST /:id/comments]', err);
     return c.json(createError('INTERNAL_ERROR', 'Não foi possível criar o comentário'), 500);
+  }
+});
+
+websitesRouter.post('/comments/:commentId/votes', requireAuth, async (c) => {
+  try {
+    const { commentId } = c.req.param();
+    const userId = c.get('userId');
+
+    const comment = await c.env.DB.prepare('SELECT website_id FROM comments WHERE id = ? AND status = "visible"')
+      .bind(commentId)
+      .first<{ website_id: string }>();
+
+    if (!comment) {
+      return c.json(createError('NOT_FOUND', 'Comentário não encontrado'), 404);
+    }
+
+    let body: { value?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
+    }
+
+    const { value } = body;
+    if (value !== 1 && value !== -1 && value !== 0) {
+      return c.json(createError('VALIDATION_ERROR', 'Voto inválido'), 400);
+    }
+
+    if (value === 0) {
+      await c.env.DB.prepare('DELETE FROM comment_votes WHERE comment_id = ? AND user_id = ?')
+        .bind(commentId, userId)
+        .run();
+    } else {
+      await c.env.DB.prepare(
+        `INSERT INTO comment_votes (id, comment_id, user_id, value)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(comment_id, user_id) DO UPDATE SET value = excluded.value, created_at = CURRENT_TIMESTAMP`,
+      )
+        .bind(generateId(), commentId, userId, value)
+        .run();
+    }
+
+    const summary = await c.env.DB.prepare(
+      `SELECT
+         COALESCE(SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END), 0) AS upvotes,
+         COALESCE(SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END), 0) AS downvotes,
+         COALESCE(SUM(value), 0) AS score,
+         MAX(CASE WHEN user_id = ? THEN value END) AS user_vote
+       FROM comment_votes
+       WHERE comment_id = ?`,
+    )
+      .bind(userId, commentId)
+      .first<{ upvotes: number; downvotes: number; score: number; user_vote: number | null }>();
+
+    return c.json(createSuccess(summary ?? { upvotes: 0, downvotes: 0, score: 0, user_vote: value }));
+  } catch (err) {
+    console.error('[comments POST /comments/:commentId/votes]', err);
+    return c.json(createError('INTERNAL_ERROR', 'Não foi possível registar o voto'), 500);
   }
 });

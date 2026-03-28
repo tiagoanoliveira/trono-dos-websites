@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/Badge';
 import { useCategories } from '@/hooks/useCategories';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
+import { ALLOWED_LANGUAGES } from '@/constants/languages';
 
 type MySuggestion = {
   id: string;
@@ -55,7 +56,7 @@ export function ProporWebsitePage() {
     author: '',
     launchDate: '',
     launchPrecision: 'unknown' as 'exact' | 'month' | 'year' | 'unknown',
-    languages: '',
+    languages: [] as string[],
     isOpenSource: false,
     sourceUrl: '',
     images: [''],
@@ -81,10 +82,7 @@ export function ProporWebsitePage() {
           author: metadata.author || undefined,
           launchDate: metadata.launchDate || undefined,
           launchPrecision: metadata.launchPrecision,
-          languages: metadata.languages
-            .split(',')
-            .map((lang) => lang.trim())
-            .filter(Boolean),
+          languages: metadata.languages,
           images: metadata.images.map((img) => img.trim()).filter(Boolean),
           isOpenSource: metadata.isOpenSource,
           sourceUrl: metadata.sourceUrl || undefined,
@@ -102,7 +100,7 @@ export function ProporWebsitePage() {
         author: '',
         launchDate: '',
         launchPrecision: 'unknown',
-        languages: '',
+        languages: [],
         isOpenSource: false,
         sourceUrl: '',
         images: [''],
@@ -272,13 +270,54 @@ export function ProporWebsitePage() {
             </div>
             <div>
               <label className="label">Linguagens utilizadas</label>
-              <input
-                className="input"
-                placeholder="Ex: TypeScript, Go, Rust"
-                value={metadata.languages}
-                onChange={(e) => setMetadata((m) => ({ ...m, languages: e.target.value }))}
-              />
-              <p className="mt-1 text-xs text-throne-500">Separa com vírgulas</p>
+              <div className="space-y-2">
+                <select
+                  className="input"
+                  value=""
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (!value) return;
+                    setMetadata((m) =>
+                      m.languages.includes(value) ? m : { ...m, languages: [...m.languages, value] },
+                    );
+                  }}
+                >
+                  <option value="">Seleciona</option>
+                  {ALLOWED_LANGUAGES.filter((lang) => !metadata.languages.includes(lang)).map((lang) => (
+                    <option key={lang} value={lang}>
+                      {lang}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex flex-wrap gap-2">
+                  {metadata.languages.length === 0 ? (
+                    <span className="text-xs text-throne-500">Nenhuma linguagem selecionada</span>
+                  ) : (
+                    metadata.languages.map((lang) => (
+                      <span
+                        key={lang}
+                        className="inline-flex items-center gap-2 rounded-full bg-throne-100 px-3 py-1 text-sm text-throne-700"
+                      >
+                        {lang}
+                        <button
+                          type="button"
+                          className="text-throne-400 hover:text-throne-700"
+                          onClick={() =>
+                            setMetadata((m) => ({
+                              ...m,
+                              languages: m.languages.filter((l) => l !== lang),
+                            }))
+                          }
+                          aria-label={`Remover ${lang}`}
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-throne-500">Lista controlada para manter consistência.</p>
+              </div>
             </div>
             <div className="space-y-2">
               <label className="label">Fotos (URLs)</label>

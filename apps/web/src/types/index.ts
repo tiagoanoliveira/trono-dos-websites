@@ -22,9 +22,10 @@ export interface Website {
   category_slug?: string;
   status: 'pending' | 'approved' | 'rejected';
   featured: boolean;
-  avg_rating?: number;
-  rating_count?: number;
-  user_rating?: number | null;
+  upvotes?: number;
+  downvotes?: number;
+  score?: number;
+  user_vote?: number | null;
   comment_count?: number;
   metadata?: WebsiteMetadata | null;
   owner_name?: string | null;
@@ -68,6 +69,10 @@ export interface Comment {
     name: string;
     avatar_url: string | null;
   };
+  upvotes: number;
+  downvotes: number;
+  score: number;
+  user_vote?: number | null;
   replies: Comment[];
 }
 

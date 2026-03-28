@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import { cn, truncate, getInitials } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
-import { StarRating } from '@/components/ui/StarRating';
 import type { Website } from '@/types';
 
 interface WebsiteCardProps {
@@ -87,14 +86,17 @@ export function WebsiteCard({ website, className }: WebsiteCardProps) {
         </p>
       )}
 
-      {/* Footer: rating + external link */}
+      {/* Footer: score + external link */}
       <div className="flex items-center justify-between gap-2 pt-1 border-t border-throne-100">
-        <StarRating
-          score={website.avg_rating ?? 0}
-          count={website.rating_count ?? 0}
-          size="sm"
-          showCount
-        />
+        <div className="flex items-center gap-2 text-sm text-throne-700">
+          <span className="inline-flex items-center gap-1 rounded-full bg-throne-50 px-2 py-1">
+            <ArrowUpIcon className="h-3.5 w-3.5" />
+            {website.score ?? 0}
+          </span>
+          <span className="text-xs text-throne-400">
+            {website.upvotes ?? 0} ↑ · {website.downvotes ?? 0} ↓
+          </span>
+        </div>
         <a
           href={website.url}
           target="_blank"
@@ -115,6 +117,14 @@ function ExternalLinkIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+    </svg>
+  );
+}
+
+function ArrowUpIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
     </svg>
   );
 }
