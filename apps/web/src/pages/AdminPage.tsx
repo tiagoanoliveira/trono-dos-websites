@@ -48,6 +48,16 @@ type ReportTargetPayload = {
   frontend_url: string | null;
 };
 
+type WebsiteSuggestionPayload = {
+  name?: string;
+  url?: string;
+  description?: string | null;
+  category_name?: string | null;
+  logo_url?: string | null;
+  screenshot_url?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
 function unwrapPaginated<T>(raw: unknown, meta?: unknown): PaginatedResponse<T> {
   if (raw && typeof raw === 'object' && 'data' in (raw as object) && 'meta' in (raw as object)) {
     return raw as PaginatedResponse<T>;
@@ -69,6 +79,30 @@ function unwrapPaginated<T>(raw: unknown, meta?: unknown): PaginatedResponse<T> 
       hasPrevPage: page > 1,
     },
   };
+}
+
+function parseWebsiteSuggestion(description: string | null): WebsiteSuggestionPayload | null {
+  if (!description) return null;
+  try {
+    const parsed = JSON.parse(description) as unknown;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed as WebsiteSuggestionPayload;
+  } catch {
+    return null;
+  }
+}
+
+function renderSuggestionValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.join(', ');
+  }
+  if (value === null || value === undefined || value === '') {
+    return '—';
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+  return String(value);
 }
 
 export function AdminPage() {
@@ -120,6 +154,8 @@ export function AdminPage() {
 
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [reportEditValue, setReportEditValue] = useState('');
+  const [reportEditUrlValue, setReportEditUrlValue] = useState('');
+  const [reportEditNameValue, setReportEditNameValue] = useState('');
 
   const reportTarget = useQuery({
     queryKey: ['admin', 'report-target', editingReportId],
@@ -131,6 +167,15 @@ export function AdminPage() {
     },
     enabled: Boolean(editingReportId),
   });
+
+  const editingReport = useMemo(
+    () => reports.data?.data.find((item) => item.id === editingReportId) ?? null,
+    [reports.data?.data, editingReportId],
+  );
+  const websiteSuggestion = useMemo(
+    () => parseWebsiteSuggestion(editingReport?.reason === 'Proposta de alteração' ? editingReport.description : null),
+    [editingReport?.description, editingReport?.reason],
+  );
 
   const moderateWebsite = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: 'approved' | 'rejected' }) => {
@@ -313,6 +358,8 @@ export function AdminPage() {
                     onClick={() => {
                       setEditingReportId(item.id);
                       setReportEditValue('');
+                      setReportEditNameValue('');
+                      setReportEditUrlValue('');
                     }}
                   >
                     Editar Conteúdo
@@ -360,8 +407,8 @@ export function AdminPage() {
       )}
 
       {editingReportId && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
-          <div className="w-full max-w-xl rounded-xl border border-throne-200 bg-white p-4 shadow-xl space-y-3">
+        <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 p-4" role="dialog" aria-modal="true">
+          <div className="my-6 max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-xl border border-throne-200 bg-white p-4 shadow-xl space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-throne-900">Origem da denúncia</h3>
               <button className="btn-ghost" onClick={() => setEditingReportId(null)}>Fechar</button>
@@ -369,9 +416,48 @@ export function AdminPage() {
             {reportTarget.isLoading && <Spinner className="text-crown-500" />}
             {reportTarget.data && (
               <>
-                <div className="rounded-lg border border-throne-200 bg-throne-50 p-3 text-sm">
-                  <pre className="whitespace-pre-wrap break-words">{JSON.stringify(reportTarget.data.target, null, 2)}</pre>
-                </div>
+                {websiteSuggestion ? (
+                  <div className="rounded-lg border border-throne-200 bg-throne-50 p-3 text-sm space-y-3">
+                    <p className="text-sm font-semibold text-throne-800">Detalhes da proposta de alteração</p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div>
+                        <p className="text-[11px] uppercase text-throne-500">Nome</p>
+                        <p className="text-throne-800">{renderSuggestionValue(websiteSuggestion.name)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase text-throne-500">URL</p>
+                        <p className="break-all text-throne-800">{renderSuggestionValue(websiteSuggestion.url)}</p>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <p className="text-[11px] uppercase text-throne-500">Descrição</p>
+                        <p className="text-throne-800">{renderSuggestionValue(websiteSuggestion.description)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase text-throne-500">Categoria</p>
+                        <p className="text-throne-800">{renderSuggestionValue(websiteSuggestion.category_name)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase text-throne-500">Logo</p>
+                        <p className="break-all text-throne-800">{renderSuggestionValue(websiteSuggestion.logo_url)}</p>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <p className="text-[11px] uppercase text-throne-500">Screenshot</p>
+                        <p className="break-all text-throne-800">{renderSuggestionValue(websiteSuggestion.screenshot_url)}</p>
+                      </div>
+                      {websiteSuggestion.metadata &&
+                        Object.entries(websiteSuggestion.metadata).map(([key, value]) => (
+                          <div key={key} className="sm:col-span-2">
+                            <p className="text-[11px] uppercase text-throne-500">{key.replace(/_/g, ' ')}</p>
+                            <p className="break-words text-throne-800">{renderSuggestionValue(value)}</p>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-throne-200 bg-throne-50 p-3 text-sm">
+                    <pre className="whitespace-pre-wrap break-words">{JSON.stringify(reportTarget.data.target, null, 2)}</pre>
+                  </div>
+                )}
                 {reportTarget.data.frontend_url && (
                   <Link
                     to={reportTarget.data.frontend_url}
@@ -381,11 +467,27 @@ export function AdminPage() {
                     Visualizar site/idea/comentário/feature
                   </Link>
                 )}
-                <div className="space-y-2">
-                  <label className="label">Novo conteúdo (edição rápida)</label>
-                  <textarea
-                    className="input min-h-[100px]"
-                    value={reportEditValue}
+                  <div className="space-y-2">
+                    <label className="label">Novo conteúdo (edição rápida)</label>
+                    {reportTarget.data.report.target_type === 'website' && (
+                      <>
+                        <input
+                          className="input"
+                          value={reportEditNameValue}
+                          onChange={(e) => setReportEditNameValue(e.target.value)}
+                          placeholder="Novo nome (opcional)"
+                        />
+                        <input
+                          className="input"
+                          value={reportEditUrlValue}
+                          onChange={(e) => setReportEditUrlValue(e.target.value)}
+                          placeholder="Nova URL (opcional)"
+                        />
+                      </>
+                    )}
+                    <textarea
+                      className="input min-h-[100px]"
+                      value={reportEditValue}
                     onChange={(e) => setReportEditValue(e.target.value)}
                     placeholder="Conteúdo editado..."
                   />
@@ -396,7 +498,14 @@ export function AdminPage() {
                         const targetType = reportTarget.data?.report.target_type;
                         if (!targetType) return;
                         if (targetType === 'website') {
-                          editReportedTarget.mutate({ reportId: editingReportId, payload: { description: reportEditValue } });
+                          editReportedTarget.mutate({
+                            reportId: editingReportId,
+                            payload: {
+                              ...(reportEditNameValue.trim() ? { name: reportEditNameValue } : {}),
+                              ...(reportEditUrlValue.trim() ? { url: reportEditUrlValue } : {}),
+                              ...(reportEditValue.trim() ? { description: reportEditValue } : {}),
+                            },
+                          });
                         } else if (targetType === 'idea') {
                           editReportedTarget.mutate({ reportId: editingReportId, payload: { description: reportEditValue } });
                         } else if (targetType === 'idea_feature') {
@@ -407,6 +516,30 @@ export function AdminPage() {
                       }}
                     >
                       Guardar edição
+                    </button>
+                    <button
+                      className="btn-primary"
+                      onClick={async () => {
+                        if (
+                          reportTarget.data?.report.target_type === 'website' &&
+                          websiteSuggestion &&
+                          editingReportId
+                        ) {
+                          await editReportedTarget.mutateAsync({
+                            reportId: editingReportId,
+                            payload: {
+                              ...(typeof websiteSuggestion.name === 'string' ? { name: websiteSuggestion.name } : {}),
+                              ...(typeof websiteSuggestion.url === 'string' ? { url: websiteSuggestion.url } : {}),
+                              ...(typeof websiteSuggestion.description === 'string'
+                                ? { description: websiteSuggestion.description }
+                                : {}),
+                            },
+                          });
+                        }
+                        moderateReport.mutate({ id: editingReportId, status: 'resolved' });
+                      }}
+                    >
+                      Aprovar alterações
                     </button>
                     <button className="btn-secondary" onClick={() => deleteReportedTarget.mutate(editingReportId)}>
                       Eliminar Conteúdo

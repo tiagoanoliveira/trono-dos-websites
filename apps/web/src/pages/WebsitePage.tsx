@@ -202,58 +202,60 @@ export function WebsitePage() {
                 </div>
               </div>
 
-              {website.description && (
-                <p className="text-throne-600 leading-relaxed break-words text-[15px]">{website.description}</p>
-              )}
+            </div>
+          </div>
 
-              {!isAuthenticated && (
-                <button className="text-sm text-crown-600 hover:text-crown-700" onClick={() => navigate('/entrar')}>
-                  Entrar para votar
-                </button>
-              )}
+          <div className="mt-4 space-y-3">
+            {website.description && (
+              <p className="text-throne-600 leading-relaxed break-words text-[15px]">{website.description}</p>
+            )}
 
-              {/* Meta */}
-                <div className="grid gap-2 text-sm text-throne-400 sm:grid-cols-2">
+            {!isAuthenticated && (
+              <button className="text-sm text-crown-600 hover:text-crown-700" onClick={() => navigate('/entrar')}>
+                Entrar para votar
+              </button>
+            )}
+
+            <div className="grid gap-2 text-sm text-throne-400 sm:grid-cols-2">
+              <span className="flex items-center gap-1">
+                <CalendarIcon className="h-4 w-4" />
+                Adicionado a {formatDate(website.created_at)}
+              </span>
+              {metadata?.author && (
+                <span className="flex items-center gap-1">
+                  <UserIcon className="h-4 w-4" />
+                  {metadata?.author}
+                </span>
+              )}
+              {launchLabel && (
                 <span className="flex items-center gap-1">
                   <CalendarIcon className="h-4 w-4" />
-                  Adicionado a {formatDate(website.created_at)}
+                  Lançado: {launchLabel}
                 </span>
-                {metadata?.author && (
-                  <span className="flex items-center gap-1">
-                    <UserIcon className="h-4 w-4" />
-                    {metadata?.author}
-                  </span>
-                )}
-                {launchLabel && (
-                  <span className="flex items-center gap-1">
-                    <CalendarIcon className="h-4 w-4" />
-                    Lançado: {launchLabel}
-                  </span>
-                )}
-                {languagesLabel && (
-                  <span className="flex items-center gap-1">
-                    <CodeIcon className="h-4 w-4" />
-                    {languagesLabel}
-                  </span>
-                )}
-                {isOpenSource && (
-                  <span className="flex items-center gap-1">
-                    <GithubIcon className="h-4 w-4" />
-                    {sourceUrl ? (
-                      <a
-                        href={sourceUrl}
-                        className="text-crown-600 hover:text-crown-700"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Código aberto
-                      </a>
-                    ) : (
-                      'Código aberto'
-                    )}
-                  </span>
-                )}
-              </div>
+              )}
+              {languagesLabel && (
+                <span className="flex items-center gap-1">
+                  <CodeIcon className="h-4 w-4" />
+                  {languagesLabel}
+                </span>
+              )}
+              {isOpenSource && (
+                <span className="flex items-center gap-1">
+                  <GithubIcon className="h-4 w-4" />
+                  {sourceUrl ? (
+                    <a
+                      href={sourceUrl}
+                      className="text-crown-600 hover:text-crown-700"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Código aberto
+                    </a>
+                  ) : (
+                    'Código aberto'
+                  )}
+                </span>
+              )}
             </div>
           </div>
 
@@ -268,6 +270,32 @@ export function WebsitePage() {
               <ExternalLinkIcon className="h-5 w-5" />
               Visitar Website
             </a>
+          </div>
+
+          <div className="mt-6 space-y-4 md:hidden">
+            <h2 className="text-lg font-semibold text-throne-900">🔗 Websites Relacionados</h2>
+            {relatedLoading ? (
+              <div className="grid gap-3 sm:grid-cols-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="card h-40 animate-pulse bg-throne-100" />
+                ))}
+              </div>
+            ) : relatedWebsites.filter((w) => w.id !== id).length === 0 ? (
+              <EmptyState
+                icon="🔗"
+                title="Sem websites relacionados"
+                description="Ainda não há outros websites nesta categoria."
+              />
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-3">
+                {relatedWebsites
+                  .filter((w) => w.id !== id)
+                  .slice(0, 3)
+                  .map((site) => (
+                    <WebsiteCard key={site.id} website={site} />
+                  ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -313,7 +341,7 @@ export function WebsitePage() {
         />
 
         {/* Related websites */}
-        <section>
+        <section className="hidden md:block">
           <h2 className="text-xl font-bold text-throne-900 mb-5">
             🔗 Websites Relacionados
           </h2>

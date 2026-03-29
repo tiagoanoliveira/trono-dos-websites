@@ -248,7 +248,7 @@ export function ReportMenu({
       {feedback && <p className="absolute right-0 mt-1 w-44 text-right text-[11px] text-throne-500">{feedback}</p>}
       {showModal && (
         <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 p-4" role="dialog" aria-modal="true">
-          <div className="my-6 w-full max-w-md rounded-xl border border-throne-200 bg-white p-4 shadow-xl">
+          <div className="my-6 max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-xl border border-throne-200 bg-white p-4 shadow-xl">
             <h3 className="text-lg font-semibold text-throne-900">Denunciar conteúdo</h3>
             <p className="mt-1 text-sm text-throne-500">Ajuda-nos a moderar a comunidade.</p>
             <div className="mt-4 space-y-3">
@@ -295,7 +295,7 @@ export function ReportMenu({
       )}
       {showSuggestModal && (
         <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 p-4" role="dialog" aria-modal="true">
-          <div className="my-6 w-full max-w-md rounded-xl border border-throne-200 bg-white p-4 shadow-xl">
+          <div className="my-6 max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-xl border border-throne-200 bg-white p-4 shadow-xl">
             <h3 className="text-lg font-semibold text-throne-900">Propor alteração</h3>
             <p className="mt-1 text-sm text-throne-500">A tua proposta será revista pela moderação.</p>
             <div className="mt-4 space-y-3">
