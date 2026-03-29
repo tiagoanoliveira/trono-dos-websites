@@ -44,9 +44,8 @@ export function HomePage() {
     <div>
       {/* Hero */}
       <section className="bg-gradient-to-b from-crown-50 to-white border-b border-throne-100">
-        <div className="container-app py-20 text-center">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-throne-900 mb-4 leading-tight">
-            👑{' '}
+        <div className="container-app py-10 text-center">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-throne-900 mb-3 leading-tight">
             <span>
               <span>Trono dos</span>{' '}
               <span className="text-crown-500">Websites</span>
@@ -72,13 +71,13 @@ export function HomePage() {
           </form>
 
           {/* CTAs */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button onClick={scrollToCategories} className="btn-primary px-6 py-3 text-base">
-              <GridIcon className="h-5 w-5" />
+          <div className="flex flex-col items-center justify-center gap-3">
+            <button onClick={scrollToCategories} className="btn-primary px-4 py-2 text-sm">
+              <GridIcon className="h-4 w-4" />
               Explorar Categorias
             </button>
-            <Link to="/propor" className="btn-secondary px-6 py-3 text-base">
-              <PlusIcon className="h-5 w-5" />
+            <Link to="/propor" className="btn-secondary px-4 py-2 text-sm">
+              <PlusIcon className="h-4 w-4" />
               Propor Website
             </Link>
           </div>
@@ -90,7 +89,7 @@ export function HomePage() {
         <div className="container-app py-8">
           <SectionHeader
             title="Batalha do Dia"
-            subtitle="Escolhe o teu favorito em segundos"
+            subtitle="Escolhe o teu favorito"
             emoji="⚔️"
           />
 

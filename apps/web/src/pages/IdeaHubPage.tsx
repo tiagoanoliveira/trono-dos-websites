@@ -133,7 +133,7 @@ export function IdeaHubPage() {
           <label className="label">Features iniciais (uma por linha)</label>
           <textarea
             className="input min-h-24"
-            placeholder={'Ex:\nComparador por distrito\nAlertas de preço\nFiltros avançados'}
+            placeholder={'Ex: Comparador de alojamento por distrito;'}
             value={featuresInput}
             onChange={(e) => setFeaturesInput(e.target.value)}
           />

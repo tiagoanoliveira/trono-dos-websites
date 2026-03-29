@@ -473,7 +473,7 @@ export function ProporWebsitePage() {
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-throne-900">Minhas contribuições</h3>
           <span className="text-sm text-throne-500">
-            Vês aqui o estado (aprovado/rejeitado/pendente) assim que for revisto.
+            Vês aqui o estado assim que for revisto.
           </span>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
@@ -502,7 +502,7 @@ export function ProporWebsitePage() {
           </div>
           <div className="flex items-center justify-center">
             <Link to="/propor-categoria" className="btn-secondary">
-              Sugerir categoria (página separada)
+              Sugerir categoria
             </Link>
           </div>
         </div>
