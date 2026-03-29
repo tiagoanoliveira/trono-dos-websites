@@ -111,7 +111,7 @@ export function IdeaDetailPage() {
               <div className="text-sm text-throne-800">{item.description}</div>
               <div className="flex items-center gap-2">
                 <span className="text-xs px-2 py-1 rounded-full bg-throne-100 text-throne-700">
-                  Score: {item.score ?? ((item.upvotes ?? 0) - (item.downvotes ?? 0))}
+                  Score: {item.score ?? 0}
                 </span>
                 <button
                   className={cn('btn-primary btn-sm', item.user_vote === 1 && 'ring-2 ring-crown-300')}

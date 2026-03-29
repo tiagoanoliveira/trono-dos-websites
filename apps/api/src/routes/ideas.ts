@@ -369,7 +369,7 @@ ideasRouter.post('/:id/features/:featureId/votes', requireAuth, async (c) => {
         upvotes: totals?.upvotes ?? 0,
         downvotes: totals?.downvotes ?? 0,
         score: totals?.score ?? 0,
-        user_vote: totals?.user_vote ?? 0,
+        user_vote: totals?.user_vote ?? null,
       }),
     );
   } catch (err) {
