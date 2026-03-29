@@ -50,6 +50,7 @@ type IdeaComment = {
 const APPROVAL_THRESHOLD = 10;
 
 async function ensureIdeaFeatureVotesTable(db: D1Database) {
+  // TODO: Remover este fallback quando todos os ambientes tiverem a migração 006 aplicada.
   await db.prepare(
     `CREATE TABLE IF NOT EXISTS idea_feature_votes (
       id TEXT PRIMARY KEY,

@@ -124,7 +124,13 @@ export function IdeaDetailPage() {
                 <button
                   className={cn('text-throne-500 transition-colors', item.user_vote === 1 ? 'text-crown-600' : 'hover:text-crown-600')}
                   disabled={!isAuthenticated}
-                  onClick={() => voteFeature.mutate({ ideaId: idea.id, featureId: item.id, value: 1 })}
+                  onClick={() =>
+                    voteFeature.mutate({
+                      ideaId: idea.id,
+                      featureId: item.id,
+                      value: item.user_vote === 1 ? 0 : 1,
+                    })
+                  }
                   aria-label="Upvote feature"
                 >
                   ▲
@@ -133,7 +139,13 @@ export function IdeaDetailPage() {
                 <button
                   className={cn('text-throne-500 transition-colors', item.user_vote === -1 ? 'text-red-600' : 'hover:text-red-600')}
                   disabled={!isAuthenticated}
-                  onClick={() => voteFeature.mutate({ ideaId: idea.id, featureId: item.id, value: -1 })}
+                  onClick={() =>
+                    voteFeature.mutate({
+                      ideaId: idea.id,
+                      featureId: item.id,
+                      value: item.user_vote === -1 ? 0 : -1,
+                    })
+                  }
                   aria-label="Downvote feature"
                 >
                   ▼

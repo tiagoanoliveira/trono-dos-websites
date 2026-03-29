@@ -67,6 +67,7 @@ export function useIdeaMutations() {
   });
 
   const vote = useMutation({
+    // value: 1 = upvote, -1 = downvote, 0 = remover voto atual
     mutationFn: async (payload: { ideaId: string; value: 1 | -1 | 0 }) => {
       const res = await api.post('/ideas/' + payload.ideaId + '/votes', { value: payload.value });
       if (!res.success) throw new Error(res.error?.message || 'Erro ao votar');
@@ -90,7 +91,7 @@ export function useIdeaMutations() {
   });
 
   const voteFeature = useMutation({
-    mutationFn: async (payload: { ideaId: string; featureId: string; value: 1 | -1 }) => {
+    mutationFn: async (payload: { ideaId: string; featureId: string; value: 1 | -1 | 0 }) => {
       const res = await api.post(
         `/ideas/${payload.ideaId}/features/${payload.featureId}/votes`,
         { value: payload.value },
