@@ -150,7 +150,7 @@ export function WebsitePage() {
                 >
                   ▲
                 </button>
-                <span className="min-w-12 text-center text-sm font-semibold text-throne-900">{website.score ?? 0}</span>
+                <span className="min-w-4 text-center text-sm font-semibold text-throne-900">{website.score ?? 0}</span>
                 <button
                   className={cn(
                     'inline-flex h-8 w-8 items-center justify-center rounded-full border border-throne-200 bg-white',
