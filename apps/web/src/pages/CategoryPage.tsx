@@ -168,7 +168,7 @@ export function CategoryPage() {
         </nav>
 
         {/* Category header */}
-        <header className="flex items-start gap-4">
+        <header className="flex items-start gap-2">
           {category.icon && (
             <span className="text-5xl leading-none" aria-hidden="true">
               {category.icon}
@@ -217,7 +217,7 @@ export function CategoryPage() {
         )}
 
         {/* Filter / sort bar */}
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <p className="text-throne-500 text-sm">
             {meta ? `${meta.total} resultado${meta.total !== 1 ? 's' : ''}` : ''}
           </p>

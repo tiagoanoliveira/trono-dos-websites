@@ -137,7 +137,7 @@ export function Header() {
         <div
           className={cn(
             'overflow-hidden transition-all duration-200 md:hidden',
-            isMenuOpen ? 'max-h-64 pb-4' : 'max-h-0'
+            isMenuOpen ? 'max-h-80 pb-4' : 'max-h-0'
           )}
         >
           <form onSubmit={handleSearch} className="mb-3">

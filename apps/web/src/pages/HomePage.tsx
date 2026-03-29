@@ -162,7 +162,7 @@ export function HomePage() {
       </section>
 
       {/* Categories */}
-      <section ref={categoriesRef} id="categorias" className="py-16">
+      <section ref={categoriesRef} id="categorias" className="py-8">
         <div className="container-app">
           <SectionHeader
             title="Categorias"
@@ -195,7 +195,7 @@ export function HomePage() {
       </section>
 
       {/* Featured websites */}
-      <section className="py-16 bg-throne-50">
+      <section className="py-8 bg-throne-50">
         <div className="container-app">
           <SectionHeader
             title="Em Destaque"
@@ -218,7 +218,7 @@ export function HomePage() {
       </section>
 
       {/* Recent additions */}
-      <section className="py-16">
+      <section className="py-8">
         <div className="container-app">
           <SectionHeader
             title="Adicionados Recentemente"
