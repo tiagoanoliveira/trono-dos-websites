@@ -68,7 +68,7 @@ let ideaCommentsSchemaEnsured = false;
 
 async function ensureIdeaFeatureVotesTable(db: D1Database) {
   if (ideaFeatureVotesSchemaEnsured) return;
-  // TODO: Remover este fallback quando todos os ambientes tiverem a migração 006 aplicada.
+  // TODO: Remover este fallback após rollout completo da migração 006 (meta: 2026-Q2).
   await db.prepare(
     `CREATE TABLE IF NOT EXISTS idea_feature_votes (
       id TEXT PRIMARY KEY,
@@ -86,7 +86,7 @@ async function ensureIdeaFeatureVotesTable(db: D1Database) {
 
 async function ensureIdeaCommentsSchema(db: D1Database) {
   if (ideaCommentsSchemaEnsured) return;
-  // TODO: substituir por migração 007 dedicada e remover este fallback após rollout completo.
+  // TODO: substituir por migração 007 dedicada e remover este fallback após rollout completo (meta: 2026-Q2).
   const columns = await db.prepare('PRAGMA table_info(idea_comments)')
     .all<{ name: string }>()
     .then((r) => r.results.map((row) => row.name));
@@ -95,13 +95,14 @@ async function ensureIdeaCommentsSchema(db: D1Database) {
     await db.prepare('ALTER TABLE idea_comments ADD COLUMN parent_id TEXT REFERENCES idea_comments(id)').run();
   }
   if (!columns.includes('status')) {
-    await db.prepare('ALTER TABLE idea_comments ADD COLUMN status TEXT DEFAULT "visible"').run();
+    await db.prepare("ALTER TABLE idea_comments ADD COLUMN status TEXT DEFAULT 'visible'").run();
   }
   if (!columns.includes('updated_at')) {
     await db.prepare('ALTER TABLE idea_comments ADD COLUMN updated_at TEXT').run();
+    await db.prepare('UPDATE idea_comments SET updated_at = created_at WHERE updated_at IS NULL').run();
   }
   if (!columns.includes('kind')) {
-    await db.prepare('ALTER TABLE idea_comments ADD COLUMN kind TEXT DEFAULT "general"').run();
+    await db.prepare("ALTER TABLE idea_comments ADD COLUMN kind TEXT DEFAULT 'general'").run();
   }
 
   await db.prepare(
@@ -562,7 +563,7 @@ ideasRouter.post('/:id/comments', requireAuth, async (c) => {
 
     if (parentId) {
       const parent = await c.env.DB.prepare(
-        'SELECT id FROM idea_comments WHERE id = ? AND idea_id = ? AND COALESCE(status, "visible") = "visible"',
+        "SELECT id FROM idea_comments WHERE id = ? AND idea_id = ? AND COALESCE(status, 'visible') = 'visible'",
       )
         .bind(parentId, id)
         .first<{ id: string }>();
@@ -653,7 +654,7 @@ ideasRouter.post('/comments/:commentId/votes', requireAuth, async (c) => {
     await ensureIdeaCommentsSchema(c.env.DB);
 
     const comment = await c.env.DB.prepare(
-      'SELECT id FROM idea_comments WHERE id = ? AND COALESCE(status, "visible") = "visible"',
+      "SELECT id FROM idea_comments WHERE id = ? AND COALESCE(status, 'visible') = 'visible'",
     )
       .bind(commentId)
       .first<{ id: string }>();
