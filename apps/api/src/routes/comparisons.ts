@@ -28,27 +28,29 @@ type ComparisonRow = {
 
 export const comparisonsRouter = new Hono<{ Bindings: Env } & AuthContext>();
 
-const COMPARISON_SELECT = `
-  SELECT
-    dc.id,
-    dc.date,
-    dc.category_id,
-    c.name AS category_name,
-    c.slug AS category_slug,
-    dc.website_a_id,
-    wa.name AS website_a_name,
-    wa.url AS website_a_url,
-    wa.logo_url AS website_a_logo_url,
-    COALESCE(wv_a.score, 0) AS website_a_score,
-    dc.website_b_id,
-    wb.name AS website_b_name,
-    wb.url AS website_b_url,
-    wb.logo_url AS website_b_logo_url,
-    COALESCE(wv_b.score, 0) AS website_b_score,
-    COALESCE(v.votes_a, 0) AS votes_a,
-    COALESCE(v.votes_b, 0) AS votes_b,
-    COALESCE(v.total_votes, 0) AS total_votes,
-    dc.created_at
+const COMPARISON_SELECT_COLUMNS = `
+  dc.id,
+  dc.date,
+  dc.category_id,
+  c.name AS category_name,
+  c.slug AS category_slug,
+  dc.website_a_id,
+  wa.name AS website_a_name,
+  wa.url AS website_a_url,
+  wa.logo_url AS website_a_logo_url,
+  COALESCE(wv_a.score, 0) AS website_a_score,
+  dc.website_b_id,
+  wb.name AS website_b_name,
+  wb.url AS website_b_url,
+  wb.logo_url AS website_b_logo_url,
+  COALESCE(wv_b.score, 0) AS website_b_score,
+  COALESCE(v.votes_a, 0) AS votes_a,
+  COALESCE(v.votes_b, 0) AS votes_b,
+  COALESCE(v.total_votes, 0) AS total_votes,
+  dc.created_at
+`;
+
+const COMPARISON_FROM_JOINS = `
   FROM daily_comparisons dc
   JOIN categories c ON c.id = dc.category_id
   JOIN websites wa ON wa.id = dc.website_a_id
@@ -113,8 +115,10 @@ comparisonsRouter.get('/today', optionalAuth, async (c) => {
     const userId = c.get('userId');
 
     const row = await c.env.DB.prepare(
-      `${COMPARISON_SELECT},
-       ${userId ? 'uv.voted_for AS user_vote' : 'NULL AS user_vote'}
+      `SELECT
+         ${COMPARISON_SELECT_COLUMNS},
+         ${userId ? 'uv.voted_for AS user_vote' : 'NULL AS user_vote'}
+       ${COMPARISON_FROM_JOINS}
        ${userId ? 'LEFT JOIN comparison_votes uv ON uv.comparison_id = dc.id AND uv.user_id = ?' : ''}
        WHERE dc.date = DATE('now')
        LIMIT 1`,
@@ -138,12 +142,14 @@ comparisonsRouter.get('/history', optionalAuth, async (c) => {
     const { page, perPage, offset } = getPaginationParams(new URL(c.req.url));
     const userId = c.get('userId');
 
-    const countRow = await c.env.DB.prepare('SELECT COUNT(*) AS total FROM daily_comparisons WHERE date < DATE(\'now\')')
+    const countRow = await c.env.DB.prepare(`SELECT COUNT(*) AS total FROM daily_comparisons WHERE date < DATE('now')`)
       .first<{ total: number }>();
 
     const rows = await c.env.DB.prepare(
-      `${COMPARISON_SELECT},
-       ${userId ? 'uv.voted_for AS user_vote' : 'NULL AS user_vote'}
+      `SELECT
+         ${COMPARISON_SELECT_COLUMNS},
+         ${userId ? 'uv.voted_for AS user_vote' : 'NULL AS user_vote'}
+       ${COMPARISON_FROM_JOINS}
        ${userId ? 'LEFT JOIN comparison_votes uv ON uv.comparison_id = dc.id AND uv.user_id = ?' : ''}
        WHERE dc.date < DATE('now')
        ORDER BY dc.date DESC
@@ -288,8 +294,7 @@ comparisonsRouter.get('/stats', async (c) => {
          w.logo_url AS website_logo_url,
          COALESCE(SUM(CASE WHEN winners.winner_id = w.id THEN 1 ELSE 0 END), 0) AS wins,
          COALESCE(SUM(CASE WHEN winners.loser_id = w.id THEN 1 ELSE 0 END), 0) AS losses,
-         COALESCE(SUM(CASE WHEN winners.winner_id = w.id THEN 1 ELSE 0 END), 0) +
-         COALESCE(SUM(CASE WHEN winners.loser_id = w.id THEN 1 ELSE 0 END), 0) AS appearances
+         COALESCE(SUM(CASE WHEN winners.winner_id = w.id OR winners.loser_id = w.id THEN 1 ELSE 0 END), 0) AS appearances
        FROM websites w
        LEFT JOIN (
          SELECT

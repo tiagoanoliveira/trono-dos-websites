@@ -102,7 +102,7 @@ export function useVoteComparison() {
           votes_a: data.votes_a,
           votes_b: data.votes_b,
           total_votes: data.total_votes,
-          user_vote: data.user_vote ?? data.votedFor,
+          user_vote: data.user_vote,
         };
       });
       queryClient.invalidateQueries({ queryKey: ['comparisons', 'history'] });
