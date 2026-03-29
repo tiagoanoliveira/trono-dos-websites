@@ -145,7 +145,19 @@ export interface IdeaComment {
   idea_id: string;
   user_id: string;
   content: string;
+  parent_id: string | null;
+  status: string;
+  kind?: string | null;
   created_at: string;
-  user_name: string;
-  user_avatar: string | null;
+  updated_at: string;
+  user: {
+    id: string;
+    name: string;
+    avatar_url: string | null;
+  };
+  upvotes: number;
+  downvotes: number;
+  score: number;
+  user_vote?: number | null;
+  replies: IdeaComment[];
 }

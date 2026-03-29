@@ -105,8 +105,12 @@ export function useIdeaMutations() {
   });
 
   const addComment = useMutation({
-    mutationFn: async (payload: { ideaId: string; content: string }) => {
-      const res = await api.post('/ideas/' + payload.ideaId + '/comments', { content: payload.content });
+    mutationFn: async (payload: { ideaId: string; content: string; parentId?: string | null; kind?: string }) => {
+      const res = await api.post('/ideas/' + payload.ideaId + '/comments', {
+        content: payload.content,
+        parentId: payload.parentId,
+        kind: payload.kind,
+      });
       if (!res.success) throw new Error(res.error?.message || 'Erro ao comentar');
       return res.data;
     },

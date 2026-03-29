@@ -7,6 +7,7 @@ import { authRouter } from './routes/auth';
 import { uploadsRouter } from './routes/uploads';
 import { notificationsRouter } from './routes/notifications';
 import { comparisonsRouter } from './routes/comparisons';
+import { reportsRouter } from './routes/reports';
 import { createError } from './utils/helpers';
 
 export type Env = {
@@ -60,6 +61,7 @@ app.route('/api/categories', categoriesRouter);
 app.route('/api/websites', websitesRouter);
 app.route('/api/ideas', ideasRouter);
 app.route('/api/comparisons', comparisonsRouter);
+app.route('/api/reports', reportsRouter);
 
 app.notFound((c) => {
   return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Route not found' } }, 404);

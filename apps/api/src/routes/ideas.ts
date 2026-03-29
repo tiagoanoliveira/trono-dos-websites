@@ -42,12 +42,27 @@ type IdeaComment = {
   idea_id: string;
   user_id: string;
   content: string;
+  parent_id: string | null;
+  status: string;
+  updated_at: string;
+  kind?: string | null;
   created_at: string;
-  user_name: string;
-  user_avatar: string | null;
+  user: {
+    id: string;
+    name: string;
+    avatar_url: string | null;
+  };
+  upvotes: number;
+  downvotes: number;
+  score: number;
+  user_vote?: number | null;
+  replies: IdeaComment[];
 };
 
 const APPROVAL_THRESHOLD = 10;
+const MIN_COMMENT_LENGTH = 3;
+const MAX_COMMENT_LENGTH = 1000;
+const COMMENT_KINDS = new Set(['opinion', 'suggestion', 'issue', 'praise', 'other', 'general']);
 
 async function ensureIdeaFeatureVotesTable(db: D1Database) {
   // TODO: Remover este fallback quando todos os ambientes tiverem a migração 006 aplicada.
@@ -63,6 +78,38 @@ async function ensureIdeaFeatureVotesTable(db: D1Database) {
   ).run();
   await db.prepare('CREATE INDEX IF NOT EXISTS idx_idea_feature_votes_feature ON idea_feature_votes(feature_id)').run();
   await db.prepare('CREATE INDEX IF NOT EXISTS idx_idea_feature_votes_user ON idea_feature_votes(user_id)').run();
+}
+
+async function ensureIdeaCommentsSchema(db: D1Database) {
+  const columns = await db.prepare('PRAGMA table_info(idea_comments)')
+    .all<{ name: string }>()
+    .then((r) => r.results.map((row) => row.name));
+
+  if (!columns.includes('parent_id')) {
+    await db.prepare('ALTER TABLE idea_comments ADD COLUMN parent_id TEXT REFERENCES idea_comments(id)').run();
+  }
+  if (!columns.includes('status')) {
+    await db.prepare('ALTER TABLE idea_comments ADD COLUMN status TEXT DEFAULT "visible"').run();
+  }
+  if (!columns.includes('updated_at')) {
+    await db.prepare('ALTER TABLE idea_comments ADD COLUMN updated_at TEXT DEFAULT CURRENT_TIMESTAMP').run();
+  }
+  if (!columns.includes('kind')) {
+    await db.prepare('ALTER TABLE idea_comments ADD COLUMN kind TEXT DEFAULT "general"').run();
+  }
+
+  await db.prepare(
+    `CREATE TABLE IF NOT EXISTS idea_comment_votes (
+      id TEXT PRIMARY KEY,
+      comment_id TEXT NOT NULL REFERENCES idea_comments(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      value INTEGER NOT NULL CHECK (value IN (-1, 1)),
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(comment_id, user_id)
+    )`,
+  ).run();
+  await db.prepare('CREATE INDEX IF NOT EXISTS idx_idea_comment_votes_comment ON idea_comment_votes(comment_id)').run();
+  await db.prepare('CREATE INDEX IF NOT EXISTS idx_idea_comment_votes_user ON idea_comment_votes(user_id)').run();
 }
 
 function resolveStatus(row: IdeaRow) {
@@ -120,6 +167,7 @@ ideasRouter.get('/:id', optionalAuth, async (c) => {
     const { id } = c.req.param();
     const userId = c.get('userId');
     await ensureIdeaFeatureVotesTable(c.env.DB);
+    await ensureIdeaCommentsSchema(c.env.DB);
 
     const idea = await c.env.DB.prepare(
       `SELECT i.*,
@@ -170,22 +218,96 @@ ideasRouter.get('/:id', optionalAuth, async (c) => {
       .all<IdeaFeature>()
       .then((r) => r.results);
 
-    const comments = await c.env.DB.prepare(
-      `SELECT ic.*, u.name AS user_name, u.avatar_url AS user_avatar
+    const commentRows = await c.env.DB.prepare(
+      `SELECT
+         ic.id,
+         ic.idea_id,
+         ic.user_id,
+         ic.content,
+         ic.parent_id,
+         COALESCE(ic.status, 'visible') AS status,
+         ic.created_at,
+         COALESCE(ic.updated_at, ic.created_at) AS updated_at,
+         COALESCE(ic.kind, 'general') AS kind,
+         u.name AS user_name,
+         u.avatar_url AS user_avatar,
+         COALESCE(v.upvotes, 0) AS upvotes,
+         COALESCE(v.downvotes, 0) AS downvotes,
+         COALESCE(v.score, 0) AS score,
+         ${userId ? 'uv.value AS user_vote' : 'NULL AS user_vote'}
        FROM idea_comments ic
        JOIN users u ON u.id = ic.user_id
-       WHERE ic.idea_id = ?
+       LEFT JOIN (
+         SELECT
+           comment_id,
+           SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END) AS upvotes,
+           SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END) AS downvotes,
+           SUM(value) AS score
+         FROM idea_comment_votes
+         GROUP BY comment_id
+       ) v ON v.comment_id = ic.id
+       ${userId ? 'LEFT JOIN idea_comment_votes uv ON uv.comment_id = ic.id AND uv.user_id = ?' : ''}
+       WHERE ic.idea_id = ? AND COALESCE(ic.status, 'visible') = 'visible'
        ORDER BY ic.created_at DESC`,
     )
-      .bind(id)
-      .all<IdeaComment>()
+      .bind(...(userId ? [userId, id] : [id]))
+      .all<{
+        id: string;
+        idea_id: string;
+        user_id: string;
+        content: string;
+        parent_id: string | null;
+        status: string;
+        created_at: string;
+        updated_at: string;
+        kind: string;
+        user_name: string;
+        user_avatar: string | null;
+        upvotes: number;
+        downvotes: number;
+        score: number;
+        user_vote: number | null;
+      }>()
       .then((r) => r.results);
+
+    const comments: IdeaComment[] = commentRows.map((row) => ({
+      id: row.id,
+      idea_id: row.idea_id,
+      user_id: row.user_id,
+      content: row.content,
+      parent_id: row.parent_id,
+      status: row.status,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      kind: row.kind ?? 'general',
+      user: {
+        id: row.user_id,
+        name: row.user_name,
+        avatar_url: row.user_avatar,
+      },
+      upvotes: row.upvotes ?? 0,
+      downvotes: row.downvotes ?? 0,
+      score: row.score ?? 0,
+      user_vote: row.user_vote ?? null,
+      replies: [],
+    }));
+
+    const commentMap = new Map<string, IdeaComment>();
+    comments.forEach((comment) => commentMap.set(comment.id, comment));
+    const rootComments: IdeaComment[] = [];
+    comments.forEach((comment) => {
+      if (comment.parent_id && commentMap.has(comment.parent_id)) {
+        commentMap.get(comment.parent_id)?.replies.push(comment);
+      } else {
+        rootComments.push(comment);
+      }
+    });
 
     const resolved: IdeaDetail = {
       ...idea,
       status: resolveStatus(idea),
       features,
-      comments,
+      comments: rootComments,
     };
 
     return c.json(createSuccess(resolved));
@@ -403,17 +525,52 @@ ideasRouter.post('/:id/comments', requireAuth, async (c) => {
   try {
     const { id } = c.req.param();
     const userId = c.get('userId');
+    await ensureIdeaCommentsSchema(c.env.DB);
 
-    let body: { content?: unknown };
+    let body: { content?: unknown; parentId?: unknown; kind?: unknown };
     try {
       body = await c.req.json();
     } catch {
       return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
     }
 
-    const { content } = body;
-    if (typeof content !== 'string' || content.trim().length < 3) {
-      return c.json(createError('VALIDATION_ERROR', 'Comentário deve ter pelo menos 3 caracteres'), 400);
+    const { content, parentId, kind } = body;
+    if (
+      typeof content !== 'string' ||
+      content.trim().length < MIN_COMMENT_LENGTH ||
+      content.trim().length > MAX_COMMENT_LENGTH
+    ) {
+      return c.json(
+        createError(
+          'VALIDATION_ERROR',
+          `Comentário deve ter entre ${MIN_COMMENT_LENGTH} e ${MAX_COMMENT_LENGTH} caracteres`,
+        ),
+        400,
+      );
+    }
+
+    if (parentId !== undefined && parentId !== null && typeof parentId !== 'string') {
+      return c.json(createError('VALIDATION_ERROR', 'parentId inválido'), 400);
+    }
+
+    if (parentId) {
+      const parent = await c.env.DB.prepare(
+        'SELECT id FROM idea_comments WHERE id = ? AND idea_id = ? AND COALESCE(status, "visible") = "visible"',
+      )
+        .bind(parentId, id)
+        .first<{ id: string }>();
+
+      if (!parent) {
+        return c.json(createError('VALIDATION_ERROR', 'Comentário pai não encontrado'), 400);
+      }
+    }
+
+    let normalizedKind = 'general';
+    if (kind !== undefined && kind !== null) {
+      if (typeof kind !== 'string' || !COMMENT_KINDS.has(kind)) {
+        return c.json(createError('VALIDATION_ERROR', 'Tipo de comentário inválido'), 400);
+      }
+      normalizedKind = kind;
     }
 
     const idea = await c.env.DB.prepare('SELECT id FROM ideas WHERE id = ?').bind(id).first();
@@ -421,15 +578,125 @@ ideasRouter.post('/:id/comments', requireAuth, async (c) => {
 
     const commentId = generateId();
     await c.env.DB.prepare(
-      'INSERT INTO idea_comments (id, idea_id, user_id, content) VALUES (?, ?, ?, ?)',
+      `INSERT INTO idea_comments (id, idea_id, user_id, content, parent_id, status, kind, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'visible', ?, CURRENT_TIMESTAMP)`,
     )
-      .bind(commentId, id, userId, content.trim())
+      .bind(commentId, id, userId, content.trim(), parentId ?? null, normalizedKind)
       .run();
 
-    return c.json(createSuccess({ id: commentId }), 201);
+    const inserted = await c.env.DB.prepare(
+      `SELECT ic.*, u.name AS user_name, u.avatar_url AS user_avatar
+       FROM idea_comments ic
+       JOIN users u ON u.id = ic.user_id
+       WHERE ic.id = ?`,
+    )
+      .bind(commentId)
+      .first<{
+        id: string;
+        idea_id: string;
+        user_id: string;
+        content: string;
+        parent_id: string | null;
+        status: string | null;
+        created_at: string;
+        updated_at: string | null;
+        kind: string | null;
+        user_name: string;
+        user_avatar: string | null;
+      }>();
+
+    if (!inserted) {
+      return c.json(createError('INTERNAL_ERROR', 'Erro ao criar comentário'), 500);
+    }
+
+    return c.json(
+      createSuccess({
+        id: inserted.id,
+        idea_id: inserted.idea_id,
+        user_id: inserted.user_id,
+        content: inserted.content,
+        parent_id: inserted.parent_id,
+        status: inserted.status ?? 'visible',
+        created_at: inserted.created_at,
+        updated_at: inserted.updated_at ?? inserted.created_at,
+        kind: inserted.kind ?? 'general',
+        user: {
+          id: inserted.user_id,
+          name: inserted.user_name,
+          avatar_url: inserted.user_avatar,
+        },
+        upvotes: 0,
+        downvotes: 0,
+        score: 0,
+        user_vote: 0,
+        replies: [],
+      }),
+      201,
+    );
   } catch (err) {
     console.error('[ideas POST /:id/comments]', err);
     return c.json(createError('INTERNAL_ERROR', 'Não foi possível comentar'), 500);
+  }
+});
+
+ideasRouter.post('/comments/:commentId/votes', requireAuth, async (c) => {
+  try {
+    const { commentId } = c.req.param();
+    const userId = c.get('userId');
+    await ensureIdeaCommentsSchema(c.env.DB);
+
+    const comment = await c.env.DB.prepare(
+      'SELECT id FROM idea_comments WHERE id = ? AND COALESCE(status, "visible") = "visible"',
+    )
+      .bind(commentId)
+      .first<{ id: string }>();
+
+    if (!comment) {
+      return c.json(createError('NOT_FOUND', 'Comentário não encontrado'), 404);
+    }
+
+    let body: { value?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
+    }
+
+    const { value } = body;
+    if (value !== 1 && value !== -1 && value !== 0) {
+      return c.json(createError('VALIDATION_ERROR', 'Voto inválido'), 400);
+    }
+
+    if (value === 0) {
+      await c.env.DB.prepare('DELETE FROM idea_comment_votes WHERE comment_id = ? AND user_id = ?')
+        .bind(commentId, userId)
+        .run();
+    } else {
+      await c.env.DB.prepare(
+        `INSERT INTO idea_comment_votes (id, comment_id, user_id, value)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(comment_id, user_id) DO UPDATE SET value = excluded.value, created_at = CURRENT_TIMESTAMP`,
+      )
+        .bind(generateId(), commentId, userId, value)
+        .run();
+    }
+
+    const summary = await c.env.DB.prepare(
+      `SELECT
+         COALESCE(SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END), 0) AS upvotes,
+         COALESCE(SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END), 0) AS downvotes,
+         COALESCE(SUM(value), 0) AS score,
+         MAX(CASE WHEN user_id = ? THEN value END) AS user_vote
+       FROM idea_comment_votes
+       WHERE comment_id = ?`,
+    )
+      .bind(userId, commentId)
+      .first<{ upvotes: number; downvotes: number; score: number; user_vote: number | null }>();
+
+    return c.json(createSuccess(summary ?? { upvotes: 0, downvotes: 0, score: 0, user_vote: value }));
+  } catch (err) {
+    console.error('[ideas POST /comments/:commentId/votes]', err);
+    return c.json(createError('INTERNAL_ERROR', 'Não foi possível registar o voto'), 500);
   }
 });
 

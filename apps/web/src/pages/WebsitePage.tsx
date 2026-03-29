@@ -522,7 +522,7 @@ function CommentItem({
           <div className="flex items-center gap-2">
             <p className="font-semibold text-throne-800">{comment.user.name}</p>
             <span className="text-xs text-throne-400">{formatDate(comment.created_at)}</span>
-            {comment.kind && (
+            {comment.kind && !comment.parent_id && (
               <span className="rounded-full bg-throne-100 px-2 py-0.5 text-[11px] font-medium text-throne-600">
                 {getCommentKindLabel(comment.kind)}
               </span>

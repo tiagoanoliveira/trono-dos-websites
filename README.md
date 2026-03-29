@@ -170,11 +170,11 @@ CREATE TABLE category_suggestions (
 - [x] Histórico de comparativos passados
 - [x] Estatísticas de vitórias por website
 ### Fase 6 — Moderação
-- [ ] Sistema de denúncias
+- [x] Sistema de denúncias
 - [ ] Painel de administração
 - [ ] Aprovação/rejeição de websites
 - [ ] Aprovação/rejeição de categorias
-- [ ] Gestão de denúncias
+- [x] Gestão de denúncias
 - [ ] Gestão de utilizadores
 ### Fase 7 — Refinamentos
 - [ ] Pesquisa global (websites + categorias)

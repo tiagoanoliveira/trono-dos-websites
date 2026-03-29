@@ -6,14 +6,19 @@ import { Spinner } from '@/components/ui/Spinner';
 import { cn, formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { useIdeaDetail, useIdeaMutations } from '@/hooks/useIdeas';
+import { useVoteIdeaComment } from '@/hooks/useIdeaComments';
+import type { IdeaComment } from '@/types';
 
 export function IdeaDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const { isAuthenticated } = useAuthStore();
   const { idea, isLoading, error } = useIdeaDetail(id);
   const { vote, voteFeature, addFeature, addComment, claim } = useIdeaMutations();
+  const voteIdeaComment = useVoteIdeaComment(id);
   const [feature, setFeature] = useState('');
   const [comment, setComment] = useState('');
+  const [kind, setKind] = useState('opinion');
+  const [commentError, setCommentError] = useState('');
 
   if (isLoading) {
     return (
@@ -160,35 +165,199 @@ export function IdeaDetailPage() {
       <section className="card p-6 space-y-3">
         <h2 className="text-xl font-semibold text-throne-900">Comentários</h2>
 
-        <div className="flex gap-2">
-          <input
-            className="input"
-            placeholder="Adicionar comentário..."
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            disabled={!isAuthenticated}
-          />
-          <button
-            className="btn-secondary"
-            disabled={!isAuthenticated || comment.trim().length < 3}
-            onClick={() => addComment.mutate({ ideaId: idea.id, content: comment }, { onSuccess: () => setComment('') })}
-          >
-            Enviar
-          </button>
+        <div className="space-y-1">
+          <div className="rounded-xl border border-throne-200 bg-white">
+            <textarea
+              className="input min-h-[36px] border-none focus:ring-0 resize-none py-2 text-sm"
+              placeholder="Escrever comentário..."
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              disabled={!isAuthenticated}
+              maxLength={1000}
+            />
+            <div className="flex items-center justify-between gap-3 border-t border-throne-100 px-3 py-1.5">
+              <select
+                className="input h-8 w-36 text-xs"
+                value={kind}
+                onChange={(e) => setKind(e.target.value)}
+                disabled={!isAuthenticated}
+              >
+                <option value="opinion">Opinião</option>
+                <option value="suggestion">Sugestão</option>
+                <option value="issue">Erro/bug</option>
+                <option value="praise">Elogio</option>
+                <option value="other">Outro</option>
+              </select>
+              <span className="text-[11px] text-throne-400">{comment.length}/1000</span>
+              <button
+                className="btn-secondary h-8 px-3 text-sm"
+                disabled={!isAuthenticated || addComment.isPending}
+                onClick={() => {
+                  setCommentError('');
+                  const content = comment.trim();
+                  if (content.length < 3) {
+                    setCommentError('Escreve um comentário primeiro.');
+                    return;
+                  }
+                  addComment.mutate(
+                    { ideaId: idea.id, content, kind },
+                    {
+                      onSuccess: () => {
+                        setComment('');
+                        setKind('opinion');
+                      },
+                      onError: (err) => setCommentError((err as Error).message),
+                    },
+                  );
+                }}
+              >
+                {addComment.isPending ? 'A enviar…' : 'Enviar'}
+              </button>
+            </div>
+          </div>
+          {commentError && <p className="text-sm text-red-600">{commentError}</p>}
+          {!isAuthenticated && <p className="text-sm text-throne-500">Entra para comentar e responder.</p>}
         </div>
 
         <div className="space-y-2">
           {idea.comments.map((item) => (
-            <div key={item.id} className="rounded-lg border border-throne-200 px-3 py-2">
-              <div className="text-sm text-throne-800">{item.content}</div>
-              <div className="text-xs text-throne-500 mt-1">
-                {item.user_name} · {formatDate(item.created_at)}
-              </div>
-            </div>
+            <IdeaCommentItem
+              key={item.id}
+              comment={item}
+              isAuthenticated={isAuthenticated}
+              onVote={(commentId, value) => voteIdeaComment.mutate({ commentId, value })}
+              voting={voteIdeaComment.isPending}
+              onReply={async (payload) => {
+                await addComment.mutateAsync({
+                  ideaId: idea.id,
+                  content: payload.content,
+                  parentId: payload.parentId,
+                  kind: payload.kind,
+                });
+              }}
+              isSubmitting={addComment.isPending}
+            />
           ))}
           {idea.comments.length === 0 && <p className="text-sm text-throne-500">Sem comentários ainda.</p>}
         </div>
       </section>
+    </div>
+  );
+}
+
+function IdeaCommentItem({
+  comment,
+  isAuthenticated,
+  onVote,
+  voting,
+  onReply,
+  isSubmitting,
+}: {
+  comment: IdeaComment;
+  isAuthenticated: boolean;
+  onVote: (commentId: string, value: -1 | 0 | 1) => void;
+  voting: boolean;
+  onReply: (payload: { content: string; parentId?: string | null; kind?: string }) => Promise<void>;
+  isSubmitting: boolean;
+}) {
+  const [replying, setReplying] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [error, setError] = useState('');
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start gap-3 rounded-lg border border-throne-200 px-3 py-2">
+        <div className="h-8 w-8 rounded-full bg-crown-500 text-white flex items-center justify-center text-xs font-semibold">
+          {(comment.user?.name ?? '?').slice(0, 2).toUpperCase()}
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-throne-800">{comment.user.name}</p>
+            <span className="text-xs text-throne-400">{formatDate(comment.created_at)}</span>
+            {!!comment.kind && !comment.parent_id && (
+              <span className="rounded-full bg-throne-100 px-2 py-0.5 text-[11px] font-medium text-throne-600">
+                {comment.kind}
+              </span>
+            )}
+          </div>
+          <p className="text-throne-700 leading-relaxed">{comment.content}</p>
+          <div className="mt-2 flex items-center gap-3 text-sm text-throne-500">
+            <div className="inline-flex items-center gap-1 rounded-full border border-throne-200 bg-throne-50 px-2 py-1">
+              <button
+                className={cn('text-throne-500 transition-colors', (comment.user_vote ?? 0) === 1 ? 'text-crown-600' : 'hover:text-crown-600')}
+                onClick={() => onVote(comment.id, (comment.user_vote ?? 0) === 1 ? 0 : 1)}
+                disabled={!isAuthenticated || voting}
+              >
+                ▲
+              </button>
+              <span className="min-w-6 text-center font-semibold text-throne-900">{comment.score}</span>
+              <button
+                className={cn('text-throne-500 transition-colors', (comment.user_vote ?? 0) === -1 ? 'text-red-600' : 'hover:text-red-600')}
+                onClick={() => onVote(comment.id, (comment.user_vote ?? 0) === -1 ? 0 : -1)}
+                disabled={!isAuthenticated || voting}
+              >
+                ▼
+              </button>
+            </div>
+            {isAuthenticated && (
+              <button className="link" onClick={() => setReplying((v) => !v)}>
+                {replying ? 'Cancelar' : 'Responder'}
+              </button>
+            )}
+          </div>
+          {replying && (
+            <div className="mt-2 space-y-2">
+              <textarea
+                className="input min-h-[36px] resize-none py-2 text-sm"
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder="Responder a este comentário..."
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  className="btn-primary"
+                  onClick={async () => {
+                    setError('');
+                    if (!replyText.trim()) {
+                      setError('Escreve uma resposta.');
+                      return;
+                    }
+                    try {
+                      await onReply({ content: replyText.trim(), parentId: comment.id });
+                      setReplyText('');
+                      setReplying(false);
+                    } catch (err) {
+                      setError((err as Error).message);
+                    }
+                  }}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'A enviar…' : 'Publicar resposta'}
+                </button>
+                <button className="btn-ghost" onClick={() => setReplying(false)} disabled={isSubmitting}>
+                  Cancelar
+                </button>
+              </div>
+              {error && <p className="text-sm text-red-600">{error}</p>}
+            </div>
+          )}
+        </div>
+      </div>
+      {comment.replies && comment.replies.length > 0 && (
+        <div className="ml-10 border-l border-throne-100 pl-4 space-y-3">
+          {comment.replies.map((reply) => (
+            <IdeaCommentItem
+              key={reply.id}
+              comment={reply}
+              isAuthenticated={isAuthenticated}
+              onVote={onVote}
+              voting={voting}
+              onReply={onReply}
+              isSubmitting={isSubmitting}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
