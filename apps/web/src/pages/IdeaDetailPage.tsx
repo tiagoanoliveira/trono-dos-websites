@@ -41,6 +41,7 @@ export function IdeaDetailPage() {
   }
 
   const score = idea.upvotes - idea.downvotes;
+  const userVote = idea.user_vote ?? 0;
 
   return (
     <div className="container-app py-10 space-y-6">
@@ -60,12 +61,30 @@ export function IdeaDetailPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-sm text-throne-600">
-          <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">Score: {score}</span>
+          <div className="inline-flex items-center gap-1 rounded-full border border-throne-200 bg-throne-50 px-2 py-1">
+            <button
+              className={cn('text-throne-500 transition-colors', userVote === 1 ? 'text-crown-600' : 'hover:text-crown-600')}
+              disabled={!isAuthenticated}
+              onClick={() => vote.mutate({ ideaId: idea.id, value: userVote === 1 ? 0 : 1 })}
+              aria-label="Upvote"
+            >
+              ▲
+            </button>
+            <span className="min-w-6 text-center font-semibold text-throne-900">{score}</span>
+            <button
+              className={cn('text-throne-500 transition-colors', userVote === -1 ? 'text-red-600' : 'hover:text-red-600')}
+              disabled={!isAuthenticated}
+              onClick={() => vote.mutate({ ideaId: idea.id, value: userVote === -1 ? 0 : -1 })}
+              aria-label="Downvote"
+            >
+              ▼
+            </button>
+          </div>
           <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">
             Criada em {formatDate(idea.created_at)}
           </span>
-          <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">Features: {idea.feature_count}</span>
-          <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">Comentários: {idea.comment_count}</span>
+          <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">🧩 {idea.feature_count}</span>
+          <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">💬 {idea.comment_count}</span>
           {idea.claimed_by ? (
             <Badge variant="info">Reclamada</Badge>
           ) : (
@@ -75,14 +94,6 @@ export function IdeaDetailPage() {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <button className="btn-primary btn-sm" disabled={!isAuthenticated} onClick={() => vote.mutate({ ideaId: idea.id, value: 1 })}>
-            Upvote
-          </button>
-          <button className="btn-ghost btn-sm" disabled={!isAuthenticated} onClick={() => vote.mutate({ ideaId: idea.id, value: -1 })}>
-            Downvote
-          </button>
-        </div>
       </section>
 
       <section className="card p-6 space-y-3">
@@ -109,21 +120,21 @@ export function IdeaDetailPage() {
           {idea.features.map((item) => (
             <div key={item.id} className="rounded-lg border border-throne-200 px-3 py-2 flex items-center justify-between gap-2">
               <div className="text-sm text-throne-800">{item.description}</div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs px-2 py-1 rounded-full bg-throne-100 text-throne-700">
-                  Score: {item.score ?? 0}
-                </span>
+              <div className="flex items-center gap-2 text-throne-700">
                 <button
-                  className={cn('btn-primary btn-sm', item.user_vote === 1 && 'ring-2 ring-crown-300')}
+                  className={cn('text-throne-500 transition-colors', item.user_vote === 1 ? 'text-crown-600' : 'hover:text-crown-600')}
                   disabled={!isAuthenticated}
                   onClick={() => voteFeature.mutate({ ideaId: idea.id, featureId: item.id, value: 1 })}
+                  aria-label="Upvote feature"
                 >
                   ▲
                 </button>
+                <span className="min-w-6 text-center text-sm font-semibold text-throne-900">{item.score ?? 0}</span>
                 <button
-                  className={cn('btn-ghost btn-sm', item.user_vote === -1 && 'ring-2 ring-red-300')}
+                  className={cn('text-throne-500 transition-colors', item.user_vote === -1 ? 'text-red-600' : 'hover:text-red-600')}
                   disabled={!isAuthenticated}
                   onClick={() => voteFeature.mutate({ ideaId: idea.id, featureId: item.id, value: -1 })}
+                  aria-label="Downvote feature"
                 >
                   ▼
                 </button>

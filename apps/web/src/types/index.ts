@@ -123,6 +123,7 @@ export interface Idea {
   created_at: string;
   upvotes: number;
   downvotes: number;
+  user_vote?: number | null;
   feature_count: number;
   comment_count: number;
 }

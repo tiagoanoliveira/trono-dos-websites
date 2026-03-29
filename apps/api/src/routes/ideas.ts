@@ -14,6 +14,7 @@ type IdeaRow = {
   created_at: string;
   upvotes: number;
   downvotes: number;
+  user_vote?: number | null;
   feature_count: number;
   comment_count: number;
   claimed_user_name?: string | null;
@@ -48,6 +49,21 @@ type IdeaComment = {
 
 const APPROVAL_THRESHOLD = 10;
 
+async function ensureIdeaFeatureVotesTable(db: D1Database) {
+  await db.prepare(
+    `CREATE TABLE IF NOT EXISTS idea_feature_votes (
+      id TEXT PRIMARY KEY,
+      feature_id TEXT NOT NULL REFERENCES idea_features(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      value INTEGER NOT NULL CHECK (value IN (-1, 1)),
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(feature_id, user_id)
+    )`,
+  ).run();
+  await db.prepare('CREATE INDEX IF NOT EXISTS idx_idea_feature_votes_feature ON idea_feature_votes(feature_id)').run();
+  await db.prepare('CREATE INDEX IF NOT EXISTS idx_idea_feature_votes_user ON idea_feature_votes(user_id)').run();
+}
+
 function resolveStatus(row: IdeaRow) {
   if (row.status !== 'approved' && row.upvotes - row.downvotes >= APPROVAL_THRESHOLD) {
     return 'approved';
@@ -66,6 +82,7 @@ ideasRouter.get('/', optionalAuth, async (c) => {
       `SELECT i.*,
               COALESCE(SUM(CASE WHEN v.value = 1 THEN 1 ELSE 0 END),0) AS upvotes,
               COALESCE(SUM(CASE WHEN v.value = -1 THEN 1 ELSE 0 END),0) AS downvotes,
+              ${c.get('userId') ? 'MAX(CASE WHEN v.user_id = ? THEN v.value END)' : 'NULL'} AS user_vote,
               COALESCE(f.feature_count,0) AS feature_count,
               COALESCE(cm.comment_count,0) AS comment_count,
               cu.name AS claimed_user_name,
@@ -83,7 +100,7 @@ ideasRouter.get('/', optionalAuth, async (c) => {
        ORDER BY i.created_at DESC
        LIMIT ? OFFSET ?`,
     )
-      .bind(perPage, offset)
+      .bind(...(c.get('userId') ? [c.get('userId'), perPage, offset] : [perPage, offset]))
       .all<IdeaRow>()
       .then((r) => r.results.map((row) => ({ ...row, status: resolveStatus(row) })));
 
@@ -101,11 +118,13 @@ ideasRouter.get('/:id', optionalAuth, async (c) => {
   try {
     const { id } = c.req.param();
     const userId = c.get('userId');
+    await ensureIdeaFeatureVotesTable(c.env.DB);
 
     const idea = await c.env.DB.prepare(
       `SELECT i.*,
               COALESCE(SUM(CASE WHEN v.value = 1 THEN 1 ELSE 0 END),0) AS upvotes,
               COALESCE(SUM(CASE WHEN v.value = -1 THEN 1 ELSE 0 END),0) AS downvotes,
+              ${userId ? 'MAX(CASE WHEN v.user_id = ? THEN v.value END)' : 'NULL'} AS user_vote,
               COALESCE(f.feature_count,0) AS feature_count,
               COALESCE(cm.comment_count,0) AS comment_count,
               cu.name AS claimed_user_name,
@@ -122,7 +141,7 @@ ideasRouter.get('/:id', optionalAuth, async (c) => {
        WHERE i.id = ?
        GROUP BY i.id`,
     )
-      .bind(id)
+      .bind(...(userId ? [userId, id] : [id]))
       .first<IdeaRow>();
 
     if (!idea) {
@@ -316,6 +335,7 @@ ideasRouter.post('/:id/features/:featureId/votes', requireAuth, async (c) => {
   try {
     const { id, featureId } = c.req.param();
     const userId = c.get('userId');
+    await ensureIdeaFeatureVotesTable(c.env.DB);
 
     let body: { value?: unknown };
     try {

@@ -67,7 +67,7 @@ export function useIdeaMutations() {
   });
 
   const vote = useMutation({
-    mutationFn: async (payload: { ideaId: string; value: 1 | -1 }) => {
+    mutationFn: async (payload: { ideaId: string; value: 1 | -1 | 0 }) => {
       const res = await api.post('/ideas/' + payload.ideaId + '/votes', { value: payload.value });
       if (!res.success) throw new Error(res.error?.message || 'Erro ao votar');
       return res.data;

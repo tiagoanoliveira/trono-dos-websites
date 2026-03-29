@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { Badge } from '@/components/ui/Badge';
 import { useIdeas, useIdeaMutations } from '@/hooks/useIdeas';
@@ -10,6 +11,7 @@ function IdeaCard({ idea }: { idea: Idea }) {
   const { vote, claim } = useIdeaMutations();
 
   const score = idea.upvotes - idea.downvotes;
+  const userVote = idea.user_vote ?? 0;
 
   return (
     <div className="card p-5 space-y-3">
@@ -23,10 +25,30 @@ function IdeaCard({ idea }: { idea: Idea }) {
         </Badge>
       </div>
 
-      <div className="flex items-center gap-3 text-sm text-throne-600">
-        <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">Score: {score}</span>
-        <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">Features: {idea.feature_count}</span>
-        <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">Comentários: {idea.comment_count}</span>
+      <div className="flex items-center gap-3 text-sm text-throne-600 flex-wrap">
+        <div className="inline-flex items-center gap-1 rounded-full border border-throne-200 bg-throne-50 px-2 py-1">
+          <button
+            className={cn('text-throne-500 transition-colors', userVote === 1 ? 'text-crown-600' : 'hover:text-crown-600')}
+            disabled={!isAuthenticated}
+            onClick={() => vote.mutate({ ideaId: idea.id, value: userVote === 1 ? 0 : 1 })}
+            aria-label="Upvote"
+            title={!isAuthenticated ? 'Entra para votar' : 'Upvote'}
+          >
+            ▲
+          </button>
+          <span className="min-w-6 text-center font-semibold text-throne-900">{score}</span>
+          <button
+            className={cn('text-throne-500 transition-colors', userVote === -1 ? 'text-red-600' : 'hover:text-red-600')}
+            disabled={!isAuthenticated}
+            onClick={() => vote.mutate({ ideaId: idea.id, value: userVote === -1 ? 0 : -1 })}
+            aria-label="Downvote"
+            title={!isAuthenticated ? 'Entra para votar' : 'Downvote'}
+          >
+            ▼
+          </button>
+        </div>
+        <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">🧩 {idea.feature_count}</span>
+        <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">💬 {idea.comment_count}</span>
         {idea.claimed_by ? (
           <Badge variant="info">Reclamada</Badge>
         ) : (
@@ -41,20 +63,6 @@ function IdeaCard({ idea }: { idea: Idea }) {
       </div>
 
       <div className="flex items-center gap-2">
-        <button
-          className="btn-primary btn-sm"
-          disabled={!isAuthenticated}
-          onClick={() => vote.mutate({ ideaId: idea.id, value: 1 })}
-        >
-          Upvote
-        </button>
-        <button
-          className="btn-ghost btn-sm"
-          disabled={!isAuthenticated}
-          onClick={() => vote.mutate({ ideaId: idea.id, value: -1 })}
-        >
-          Downvote
-        </button>
         <Link to={`/ideias/${idea.id}`} className="btn-secondary btn-sm">
           Ver detalhes
         </Link>
@@ -95,19 +103,19 @@ export function IdeaHubPage() {
             <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
           <div className="space-y-2">
-              <label className="label">Descrição</label>
-              <input className="input" value={description} onChange={(e) => setDescription(e.target.value)} />
-            </div>
+            <label className="label">Descrição</label>
+            <input className="input" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
-          <div className="space-y-2">
-            <label className="label">Features iniciais (uma por linha)</label>
-            <textarea
-              className="input min-h-24"
-              placeholder={'Ex:\nComparador por distrito\nAlertas de preço\nFiltros avançados'}
-              value={featuresInput}
-              onChange={(e) => setFeaturesInput(e.target.value)}
-            />
-          </div>
+        </div>
+        <div className="space-y-2">
+          <label className="label">Features iniciais (uma por linha)</label>
+          <textarea
+            className="input min-h-24"
+            placeholder={'Ex:\nComparador por distrito\nAlertas de preço\nFiltros avançados'}
+            value={featuresInput}
+            onChange={(e) => setFeaturesInput(e.target.value)}
+          />
+        </div>
         <button
           className="btn-primary"
           disabled={!isAuthenticated || title.trim().length < 3}
