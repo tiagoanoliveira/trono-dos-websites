@@ -130,6 +130,7 @@ export function IdeaDetailPage() {
             <div key={item.id} className="rounded-lg border border-throne-200 px-3 py-2 flex items-center justify-between gap-2">
               <div className="text-sm text-throne-800">{item.description}</div>
               <div className="flex items-center gap-2 text-throne-700">
+                <ReportMenu targetType="idea_feature" targetId={item.id} />
                 <button
                   className={cn('text-throne-500 transition-colors', item.user_vote === 1 ? 'text-crown-600' : 'hover:text-crown-600')}
                   disabled={!isAuthenticated}

@@ -16,7 +16,7 @@ type ReportRow = {
   resolved_at: string | null;
 };
 
-const ALLOWED_TARGET_TYPES = new Set(['website', 'comment', 'user', 'idea']);
+const ALLOWED_TARGET_TYPES = new Set(['website', 'comment', 'user', 'idea', 'idea_feature']);
 const ALLOWED_STATUSES = new Set(['pending', 'reviewed', 'resolved', 'dismissed']);
 let reportsSchemaEnsured = false;
 
