@@ -122,7 +122,7 @@ export function WebsitePage() {
         </nav>
 
         {/* Header card */}
-        <div className="card p-4 sm:p-8">
+        <div className="card p-4 sm:p-6">
           <div className="flex flex-col md:flex-row items-start gap-4 sm:gap-6">
             {/* Logo */}
             <div className="w-full md:w-auto shrink-0 space-y-3">
@@ -183,8 +183,13 @@ export function WebsitePage() {
                   </a>
                 </div>
                  <div className="flex items-center gap-2 flex-wrap w-full lg:w-auto">
-                  <ReportMenu targetType="website" targetId={website.id} />
-                  {website.featured && <Badge variant="warning">⭐ Destaque</Badge>}
+                  <ReportMenu
+                    targetType="website"
+                    targetId={website.id}
+                    websiteName={website.name}
+                    websiteUrl={website.url}
+                    websiteDescription={website.description}
+                  />
                   {website.category_name && (
                     <Link to={`/categoria/${website.category_slug ?? ''}`}>
                       <Badge variant="default">{website.category_name}</Badge>
@@ -194,7 +199,7 @@ export function WebsitePage() {
               </div>
 
               {website.description && (
-                <p className="text-throne-600 leading-relaxed break-words">{website.description}</p>
+                <p className="text-throne-600 leading-relaxed break-words text-[15px]">{website.description}</p>
               )}
 
               {!isAuthenticated && (

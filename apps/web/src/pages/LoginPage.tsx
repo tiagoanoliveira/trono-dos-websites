@@ -46,6 +46,17 @@ export function LoginPage() {
             </div>
           )}
 
+          <GoogleLoginButton onSuccess={() => navigate('/')} />
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-throne-200" />
+            </div>
+            <div className="relative flex justify-center text-xs text-throne-400">
+              <span className="bg-white px-2">ou entra com email</span>
+            </div>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="email" className="label">
@@ -91,16 +102,6 @@ export function LoginPage() {
             </button>
           </form>
 
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-throne-200" />
-            </div>
-            <div className="relative flex justify-center text-xs text-throne-400">
-              <span className="bg-white px-2">ou</span>
-            </div>
-          </div>
-
-          <GoogleLoginButton onSuccess={() => navigate('/')} />
         </div>
       </div>
     </div>

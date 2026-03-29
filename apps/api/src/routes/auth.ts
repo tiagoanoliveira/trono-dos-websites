@@ -374,11 +374,29 @@ authRouter.post('/google', async (c) => {
     .first<DbUser>();
 
   if (user) {
-    if (!user.google_id) {
-      await c.env.DB.prepare('UPDATE users SET google_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-        .bind(sub, user.id)
+    const shouldUpdateGoogleId = !user.google_id;
+    const shouldUpdateAvatar = typeof picture === 'string' && picture.trim().length > 0 && user.avatar_url !== picture;
+    if (shouldUpdateGoogleId || shouldUpdateAvatar) {
+      const updates: string[] = [];
+      const values: Array<string> = [];
+      if (shouldUpdateGoogleId) {
+        updates.push('google_id = ?');
+        values.push(sub);
+      }
+      if (shouldUpdateAvatar) {
+        updates.push('avatar_url = ?');
+        values.push(picture);
+      }
+      updates.push('updated_at = CURRENT_TIMESTAMP');
+      values.push(user.id);
+      await c.env.DB.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`)
+        .bind(...values)
         .run();
-      user = { ...user, google_id: sub };
+      user = {
+        ...user,
+        google_id: shouldUpdateGoogleId ? sub : user.google_id,
+        avatar_url: shouldUpdateAvatar ? picture : user.avatar_url,
+      };
     }
   } else {
     const id = generateId();

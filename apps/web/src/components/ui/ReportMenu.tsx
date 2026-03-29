@@ -9,20 +9,30 @@ const REASONS = ['Spam', 'Ofensivo', 'Fraude', 'Conteúdo impróprio', 'Outro'];
 export function ReportMenu({
   targetType,
   targetId,
+  websiteName,
+  websiteUrl,
+  websiteDescription,
   className = '',
 }: {
   targetType: ReportTargetType;
   targetId: string;
+  websiteName?: string;
+  websiteUrl?: string;
+  websiteDescription?: string | null;
   className?: string;
 }) {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
   const [open, setOpen] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [showSuggestModal, setShowSuggestModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [reason, setReason] = useState('');
   const [description, setDescription] = useState('');
+  const [suggestName, setSuggestName] = useState(websiteName ?? '');
+  const [suggestUrl, setSuggestUrl] = useState(websiteUrl ?? '');
+  const [suggestDescription, setSuggestDescription] = useState(websiteDescription ?? '');
   const [formError, setFormError] = useState('');
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -72,6 +82,53 @@ export function ReportMenu({
     }
   };
 
+  const submitSuggestion = async () => {
+    setFormError('');
+    if (targetType !== 'website') return;
+
+    const nextName = suggestName.trim();
+    const nextUrl = suggestUrl.trim();
+    const nextDescription = suggestDescription.trim();
+
+    if (!nextName || !nextUrl) {
+      setFormError('Nome e URL são obrigatórios.');
+      return;
+    }
+    if (nextName === (websiteName ?? '') && nextUrl === (websiteUrl ?? '') && nextDescription === (websiteDescription ?? '')) {
+      setFormError('Faz pelo menos uma alteração antes de enviar.');
+      return;
+    }
+
+    setOpen(false);
+    setFeedback('');
+    setIsSubmitting(true);
+
+    try {
+      const payloadLines = [
+        `Nome: ${nextName}`,
+        `URL: ${nextUrl}`,
+        `Descrição: ${nextDescription || '(sem descrição)'}`,
+      ];
+      const res = await api.post<{ id: string }>('/reports', {
+        target_type: 'website',
+        target_id: targetId,
+        reason: 'Proposta de alteração',
+        description: payloadLines.join('\n'),
+      });
+
+      if (!res.success) {
+        setFeedback(res.error?.message ?? 'Não foi possível enviar proposta.');
+      } else {
+        setShowSuggestModal(false);
+        setFeedback('Proposta enviada para moderação.');
+      }
+    } catch {
+      setFeedback('Não foi possível enviar proposta.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div ref={rootRef} className={`relative ${className}`}>
       <button
@@ -84,7 +141,25 @@ export function ReportMenu({
         ⋯
       </button>
       {open && (
-        <div className="absolute right-0 z-20 mt-1 min-w-32 rounded-md border border-throne-200 bg-white p-1 shadow-lg">
+        <div className="absolute left-0 right-auto sm:left-auto sm:right-0 z-30 mt-1 min-w-44 rounded-md border border-throne-200 bg-white p-1 shadow-lg">
+          {targetType === 'website' && (
+            <button
+              type="button"
+              className="w-full rounded px-2 py-1.5 text-left text-sm text-throne-700 hover:bg-throne-50"
+              onClick={() => {
+                setOpen(false);
+                if (!isAuthenticated) {
+                  setFeedback('Entra para propor alterações.');
+                  navigate('/entrar');
+                  return;
+                }
+                setShowSuggestModal(true);
+              }}
+              disabled={isSubmitting}
+            >
+              Propor alteração
+            </button>
+          )}
           <button
             type="button"
             className="w-full rounded px-2 py-1.5 text-left text-sm text-red-700 hover:bg-red-50"
@@ -146,6 +221,50 @@ export function ReportMenu({
               </button>
               <button type="button" className="btn-primary" onClick={submitReport} disabled={isSubmitting}>
                 {isSubmitting ? 'A enviar…' : 'Enviar denúncia'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showSuggestModal && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md rounded-xl border border-throne-200 bg-white p-4 shadow-xl">
+            <h3 className="text-lg font-semibold text-throne-900">Propor alteração</h3>
+            <p className="mt-1 text-sm text-throne-500">A tua proposta será revista pela moderação.</p>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="label">Nome</label>
+                <input className="input" value={suggestName} onChange={(e) => setSuggestName(e.target.value)} disabled={isSubmitting} />
+              </div>
+              <div>
+                <label className="label">URL</label>
+                <input className="input" value={suggestUrl} onChange={(e) => setSuggestUrl(e.target.value)} disabled={isSubmitting} />
+              </div>
+              <div>
+                <label className="label">Descrição</label>
+                <textarea
+                  className="input min-h-[100px]"
+                  value={suggestDescription}
+                  onChange={(e) => setSuggestDescription(e.target.value)}
+                  disabled={isSubmitting}
+                  maxLength={600}
+                />
+              </div>
+              {formError && <p className="text-sm text-red-600">{formError}</p>}
+            </div>
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => {
+                  if (isSubmitting) return;
+                  setShowSuggestModal(false);
+                }}
+              >
+                Cancelar
+              </button>
+              <button type="button" className="btn-primary" onClick={submitSuggestion} disabled={isSubmitting}>
+                {isSubmitting ? 'A enviar…' : 'Enviar proposta'}
               </button>
             </div>
           </div>

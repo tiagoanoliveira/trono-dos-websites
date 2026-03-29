@@ -25,7 +25,7 @@ export function GoogleLoginButton({ onSuccess }: GoogleLoginButtonProps) {
   const [error, setError] = useState<string | null>(null);
   const { loginWithGoogle } = useAuthStore();
 
-  const clientId = import.meta.env.GOOGLE_CLIENT_ID;
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.GOOGLE_CLIENT_ID;
 
   useEffect(() => {
     if (typeof clientId !== 'string' || clientId.length === 0) {
@@ -96,17 +96,15 @@ export function GoogleLoginButton({ onSuccess }: GoogleLoginButtonProps) {
     document.body.appendChild(script);
   }, [clientId, loginWithGoogle, onSuccess]);
 
-  if (!clientId) {
-    return (
-      <button type="button" className="btn-secondary w-full justify-center gap-2 opacity-60" disabled>
-        Google indisponível
-      </button>
-    );
-  }
-
   return (
     <div className="space-y-2">
-      <div ref={containerRef} className="flex justify-center" />
+      {clientId ? (
+        <div ref={containerRef} className="flex justify-center" />
+      ) : (
+        <button type="button" className="btn-secondary w-full justify-center gap-2 opacity-60" disabled>
+          Configurar Google OAuth
+        </button>
+      )}
       {error && <p className="text-xs text-red-600 text-center">{error}</p>}
       {isLoading && <p className="text-xs text-throne-400 text-center">A validar conta Google…</p>}
     </div>

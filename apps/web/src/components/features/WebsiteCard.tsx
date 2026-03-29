@@ -61,11 +61,6 @@ export function WebsiteCard({ website, className }: WebsiteCardProps) {
               </Link>
               <p className="text-xs text-throne-400 mt-0.5 truncate">{domain}</p>
             </div>
-            {website.featured && (
-              <Badge variant="warning" size="sm" className="shrink-0">
-                ⭐ Destaque
-              </Badge>
-            )}
           </div>
 
           {/* Category */}
