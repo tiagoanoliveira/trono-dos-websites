@@ -31,7 +31,6 @@ export function LoginPage() {
       <div className="w-full max-w-md">
         <div className="card p-8">
           <div className="mb-8 text-center">
-            <span className="text-4xl">👑</span>
             <h1 className="mt-3 text-2xl font-bold text-throne-900">Entrar na conta</h1>
             <p className="mt-1 text-sm text-throne-500">
               Ainda não tens conta?{' '}

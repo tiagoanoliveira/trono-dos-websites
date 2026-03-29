@@ -73,12 +73,12 @@ export function HomePage() {
           </form>
 
           {/* CTAs */}
-          <div className="flex flex-col items-center justify-center gap-3">
-            <button onClick={scrollToCategories} className="btn-primary px-4 py-2 text-sm">
+          <div className="flex flex-row items-center justify-center gap-3">
+            <button onClick={scrollToCategories} className="btn-primary px-3 py-2 text-sm">
               <GridIcon className="h-4 w-4" />
               Explorar Categorias
             </button>
-            <Link to="/propor" className="btn-secondary px-4 py-2 text-sm">
+            <Link to="/propor" className="btn-secondary px-3 py-2 text-sm">
               <PlusIcon className="h-4 w-4" />
               Propor Website
             </Link>
