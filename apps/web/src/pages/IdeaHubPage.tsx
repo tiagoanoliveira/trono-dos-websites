@@ -7,9 +7,7 @@ import type { Idea } from '@/types';
 
 function IdeaCard({ idea }: { idea: Idea }) {
   const { isAuthenticated } = useAuthStore();
-  const { vote, addFeature, addComment, claim } = useIdeaMutations();
-  const [feature, setFeature] = useState('');
-  const [comment, setComment] = useState('');
+  const { vote, claim } = useIdeaMutations();
 
   const score = idea.upvotes - idea.downvotes;
 
@@ -26,8 +24,6 @@ function IdeaCard({ idea }: { idea: Idea }) {
       </div>
 
       <div className="flex items-center gap-3 text-sm text-throne-600">
-        <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">+{idea.upvotes}</span>
-        <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">-{idea.downvotes}</span>
         <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">Score: {score}</span>
         <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">Features: {idea.feature_count}</span>
         <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">Comentários: {idea.comment_count}</span>
@@ -59,51 +55,9 @@ function IdeaCard({ idea }: { idea: Idea }) {
         >
           Downvote
         </button>
-      </div>
-
-      <div className="grid gap-2 md:grid-cols-2">
-        <div className="space-y-2">
-          <p className="text-sm font-semibold text-throne-800">Adicionar funcionalidade</p>
-          <div className="flex gap-2">
-            <input
-              className="input"
-              placeholder="Ex: login.gov para autenticação"
-              value={feature}
-              onChange={(e) => setFeature(e.target.value)}
-              disabled={!isAuthenticated}
-            />
-            <button
-              className="btn-primary"
-              disabled={!isAuthenticated || feature.trim().length < 3}
-              onClick={() => {
-                addFeature.mutate({ ideaId: idea.id, description: feature }, { onSuccess: () => setFeature('') });
-              }}
-            >
-              Adicionar
-            </button>
-          </div>
-        </div>
-        <div className="space-y-2">
-          <p className="text-sm font-semibold text-throne-800">Comentar</p>
-          <div className="flex gap-2">
-            <input
-              className="input"
-              placeholder="Comentário..."
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              disabled={!isAuthenticated}
-            />
-            <button
-              className="btn-secondary"
-              disabled={!isAuthenticated || comment.trim().length < 3}
-              onClick={() => {
-                addComment.mutate({ ideaId: idea.id, content: comment }, { onSuccess: () => setComment('') });
-              }}
-            >
-              Enviar
-            </button>
-          </div>
-        </div>
+        <Link to={`/ideias/${idea.id}`} className="btn-secondary btn-sm">
+          Ver detalhes
+        </Link>
       </div>
     </div>
   );
@@ -115,6 +69,7 @@ export function IdeaHubPage() {
   const { createIdea } = useIdeaMutations();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [featuresInput, setFeaturesInput] = useState('');
 
   return (
     <div className="container-app py-10 space-y-6">
@@ -140,20 +95,37 @@ export function IdeaHubPage() {
             <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <label className="label">Descrição</label>
-            <input className="input" value={description} onChange={(e) => setDescription(e.target.value)} />
+              <label className="label">Descrição</label>
+              <input className="input" value={description} onChange={(e) => setDescription(e.target.value)} />
+            </div>
           </div>
-        </div>
+          <div className="space-y-2">
+            <label className="label">Features iniciais (uma por linha)</label>
+            <textarea
+              className="input min-h-24"
+              placeholder={'Ex:\nComparador por distrito\nAlertas de preço\nFiltros avançados'}
+              value={featuresInput}
+              onChange={(e) => setFeaturesInput(e.target.value)}
+            />
+          </div>
         <button
           className="btn-primary"
           disabled={!isAuthenticated || title.trim().length < 3}
           onClick={() =>
             createIdea.mutate(
-              { title, description },
+              {
+                title,
+                description,
+                features: featuresInput
+                  .split('\n')
+                  .map((f) => f.trim())
+                  .filter((f) => f.length >= 3),
+              },
               {
                 onSuccess: () => {
                   setTitle('');
                   setDescription('');
+                  setFeaturesInput('');
                 },
               },
             )

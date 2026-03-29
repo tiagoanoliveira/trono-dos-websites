@@ -133,6 +133,10 @@ export interface IdeaFeature {
   description: string;
   created_by?: string | null;
   created_at: string;
+  upvotes?: number;
+  downvotes?: number;
+  score?: number;
+  user_vote?: number | null;
 }
 
 export interface IdeaComment {

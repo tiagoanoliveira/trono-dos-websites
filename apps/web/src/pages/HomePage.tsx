@@ -1,16 +1,19 @@
 import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { cn } from '@/lib/utils';
+import { cn, getInitials } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CategoryCard } from '@/components/features/CategoryCard';
 import { WebsiteCard } from '@/components/features/WebsiteCard';
 import { useCategories } from '@/hooks/useCategories';
 import { useWebsites } from '@/hooks/useWebsites';
+import { useTodayComparison, useVoteComparison } from '@/hooks/useComparisons';
+import { useAuthStore } from '@/stores/authStore';
 
 export function HomePage() {
   const categoriesRef = useRef<HTMLElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuthStore();
 
   const { categories, isLoading: categoriesLoading, error: categoriesError } = useCategories();
   const { websites: featuredWebsites, isLoading: featuredLoading } = useWebsites({
@@ -21,6 +24,8 @@ export function HomePage() {
     sort: 'recent',
     perPage: 4,
   });
+  const { comparison, isLoading: comparisonLoading } = useTodayComparison();
+  const voteComparison = useVoteComparison();
 
   const totalWebsites = categories.reduce((sum, c) => sum + (c.websiteCount ?? 0), 0);
 
@@ -77,6 +82,71 @@ export function HomePage() {
               Propor Website
             </Link>
           </div>
+        </div>
+      </section>
+
+      {/* Daily comparison battle */}
+      <section className="border-b border-throne-100 bg-white">
+        <div className="container-app py-8">
+          <SectionHeader
+            title="Batalha do Dia"
+            subtitle="Escolhe o teu favorito em segundos"
+            emoji="⚔️"
+          />
+
+          {comparisonLoading ? (
+            <div className="card h-32 animate-pulse bg-throne-100" />
+          ) : !comparison ? (
+            <EmptyState
+              icon="⚖️"
+              title="Comparativo indisponível"
+              description="O comparativo diário será publicado em breve."
+            />
+          ) : (
+            <div className="card p-4">
+              <div className="grid items-center gap-3 md:grid-cols-[1fr_auto_1fr]">
+                <BattleSite
+                  name={comparison.website_a.name}
+                  logoUrl={comparison.website_a.logo_url}
+                  score={comparison.votes_a}
+                  selected={comparison.user_vote === comparison.website_a.id}
+                />
+                <div className="flex flex-col items-center gap-2">
+                  <div className="text-center text-throne-500 font-bold">VS</div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className={cn('btn-primary btn-sm', voteComparison.isPending && 'opacity-60 cursor-not-allowed')}
+                      onClick={() =>
+                        isAuthenticated
+                          ? voteComparison.mutate({ comparisonId: comparison.id, votedFor: comparison.website_a.id })
+                          : navigate('/entrar')
+                      }
+                      disabled={voteComparison.isPending}
+                    >
+                      ← Votar
+                    </button>
+                    <button
+                      className={cn('btn-primary btn-sm', voteComparison.isPending && 'opacity-60 cursor-not-allowed')}
+                      onClick={() =>
+                        isAuthenticated
+                          ? voteComparison.mutate({ comparisonId: comparison.id, votedFor: comparison.website_b.id })
+                          : navigate('/entrar')
+                      }
+                      disabled={voteComparison.isPending}
+                    >
+                      Votar →
+                    </button>
+                  </div>
+                </div>
+                <BattleSite
+                  name={comparison.website_b.name}
+                  logoUrl={comparison.website_b.logo_url}
+                  score={comparison.votes_b}
+                  selected={comparison.user_vote === comparison.website_b.id}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -169,6 +239,36 @@ export function HomePage() {
           )}
         </div>
       </section>
+    </div>
+  );
+}
+
+function BattleSite({
+  name,
+  logoUrl,
+  score,
+  selected,
+}: {
+  name: string;
+  logoUrl: string | null;
+  score: number;
+  selected: boolean;
+}) {
+  return (
+    <div className={cn('rounded-xl border p-3', selected ? 'border-crown-400 bg-crown-50' : 'border-throne-200')}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          {logoUrl ? (
+            <img src={logoUrl} alt={`Logo de ${name}`} className="h-10 w-10 rounded-lg object-cover border border-throne-200" />
+          ) : (
+            <div className="h-10 w-10 rounded-lg bg-crown-100 text-crown-700 font-semibold flex items-center justify-center">
+              {getInitials(name)}
+            </div>
+          )}
+          <div className="truncate font-medium text-throne-900">{name}</div>
+        </div>
+      </div>
+      <div className="mt-2 text-xs text-throne-500">Votos: {score}</div>
     </div>
   );
 }

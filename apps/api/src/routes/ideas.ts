@@ -30,6 +30,10 @@ type IdeaFeature = {
   description: string;
   created_by: string | null;
   created_at: string;
+  upvotes?: number;
+  downvotes?: number;
+  score?: number;
+  user_vote?: number | null;
 };
 
 type IdeaComment = {
@@ -96,6 +100,7 @@ ideasRouter.get('/', optionalAuth, async (c) => {
 ideasRouter.get('/:id', optionalAuth, async (c) => {
   try {
     const { id } = c.req.param();
+    const userId = c.get('userId');
 
     const idea = await c.env.DB.prepare(
       `SELECT i.*,
@@ -125,9 +130,23 @@ ideasRouter.get('/:id', optionalAuth, async (c) => {
     }
 
     const features = await c.env.DB.prepare(
-      'SELECT * FROM idea_features WHERE idea_id = ? ORDER BY created_at DESC',
+      `SELECT
+         f.id,
+         f.idea_id,
+         f.description,
+         f.created_by,
+         f.created_at,
+         COALESCE(SUM(CASE WHEN fv.value = 1 THEN 1 ELSE 0 END), 0) AS upvotes,
+         COALESCE(SUM(CASE WHEN fv.value = -1 THEN 1 ELSE 0 END), 0) AS downvotes,
+         COALESCE(SUM(fv.value), 0) AS score,
+         ${userId ? 'MAX(CASE WHEN fv.user_id = ? THEN fv.value END)' : 'NULL'} AS user_vote
+       FROM idea_features f
+       LEFT JOIN idea_feature_votes fv ON fv.feature_id = f.id
+       WHERE f.idea_id = ?
+       GROUP BY f.id
+       ORDER BY f.created_at DESC`,
     )
-      .bind(id)
+      .bind(...(userId ? [userId, id] : [id]))
       .all<IdeaFeature>()
       .then((r) => r.results);
 
@@ -158,16 +177,27 @@ ideasRouter.get('/:id', optionalAuth, async (c) => {
 
 ideasRouter.post('/', requireAuth, async (c) => {
   try {
-    let body: { title?: unknown; description?: unknown };
+    let body: { title?: unknown; description?: unknown; features?: unknown };
     try {
       body = await c.req.json();
     } catch {
       return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
     }
 
-    const { title, description } = body;
+    const { title, description, features } = body;
     if (typeof title !== 'string' || title.trim().length < 3) {
       return c.json(createError('VALIDATION_ERROR', 'Título deve ter pelo menos 3 caracteres'), 400);
+    }
+
+    let normalizedFeatures: string[] = [];
+    if (features !== undefined) {
+      if (!Array.isArray(features)) {
+        return c.json(createError('VALIDATION_ERROR', 'Features devem ser uma lista de itens'), 400);
+      }
+      normalizedFeatures = features
+        .filter((feature): feature is string => typeof feature === 'string')
+        .map((feature) => feature.trim())
+        .filter((feature) => feature.length >= 3);
     }
 
     const id = generateId();
@@ -178,6 +208,14 @@ ideasRouter.post('/', requireAuth, async (c) => {
     )
       .bind(id, title.trim(), description && typeof description === 'string' ? description.trim() : null, userId)
       .run();
+
+    for (const feature of normalizedFeatures) {
+      await c.env.DB.prepare(
+        'INSERT INTO idea_features (id, idea_id, description, created_by) VALUES (?, ?, ?, ?)',
+      )
+        .bind(generateId(), id, feature, userId)
+        .run();
+    }
 
     return c.json(createSuccess({ id }), 201);
   } catch (err) {
@@ -271,6 +309,72 @@ ideasRouter.post('/:id/features', requireAuth, async (c) => {
   } catch (err) {
     console.error('[ideas POST /:id/features]', err);
     return c.json(createError('INTERNAL_ERROR', 'Não foi possível adicionar funcionalidade'), 500);
+  }
+});
+
+ideasRouter.post('/:id/features/:featureId/votes', requireAuth, async (c) => {
+  try {
+    const { id, featureId } = c.req.param();
+    const userId = c.get('userId');
+
+    let body: { value?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
+    }
+
+    const { value } = body;
+    if (value !== 1 && value !== -1 && value !== 0) {
+      return c.json(createError('VALIDATION_ERROR', 'Voto inválido'), 400);
+    }
+
+    const feature = await c.env.DB.prepare(
+      'SELECT id FROM idea_features WHERE id = ? AND idea_id = ?',
+    )
+      .bind(featureId, id)
+      .first<{ id: string }>();
+    if (!feature) return c.json(createError('NOT_FOUND', 'Feature não encontrada'), 404);
+
+    if (value === 0) {
+      await c.env.DB.prepare(
+        'DELETE FROM idea_feature_votes WHERE feature_id = ? AND user_id = ?',
+      )
+        .bind(featureId, userId)
+        .run();
+    } else {
+      await c.env.DB.prepare(
+        `INSERT INTO idea_feature_votes (id, feature_id, user_id, value)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(feature_id, user_id) DO UPDATE SET value = excluded.value, created_at = CURRENT_TIMESTAMP`,
+      )
+        .bind(generateId(), featureId, userId, value)
+        .run();
+    }
+
+    const totals = await c.env.DB.prepare(
+      `SELECT
+         COALESCE(SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END), 0) AS upvotes,
+         COALESCE(SUM(CASE WHEN value = -1 THEN 1 ELSE 0 END), 0) AS downvotes,
+         COALESCE(SUM(value), 0) AS score,
+         MAX(CASE WHEN user_id = ? THEN value END) AS user_vote
+       FROM idea_feature_votes
+       WHERE feature_id = ?`,
+    )
+      .bind(userId, featureId)
+      .first<{ upvotes: number; downvotes: number; score: number; user_vote: number | null }>();
+
+    return c.json(
+      createSuccess({
+        upvotes: totals?.upvotes ?? 0,
+        downvotes: totals?.downvotes ?? 0,
+        score: totals?.score ?? 0,
+        user_vote: totals?.user_vote ?? 0,
+      }),
+    );
+  } catch (err) {
+    console.error('[ideas POST /:id/features/:featureId/votes]', err);
+    return c.json(createError('INTERNAL_ERROR', 'Não foi possível votar na feature'), 500);
   }
 });
 
