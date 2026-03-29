@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { formatDate, getInitials, cn } from '@/lib/utils';
+import { formatDate, formatRelativeDate, getInitials, cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/Spinner';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { WebsiteCard } from '@/components/features/WebsiteCard';
+import { ReportMenu } from '@/components/ui/ReportMenu';
 import { useWebsiteById, useWebsites } from '@/hooks/useWebsites';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
@@ -121,10 +122,10 @@ export function WebsitePage() {
         </nav>
 
         {/* Header card */}
-        <div className="card p-6 sm:p-8">
+        <div className="card p-4 sm:p-6">
           <div className="flex items-start gap-4 sm:gap-6">
             {/* Logo */}
-            <div className="shrink-0 space-y-3">
+            <div className="w-auto shrink-0 space-y-3">
               {website.logo_url ? (
                 <img
                   src={website.logo_url}
@@ -136,7 +137,7 @@ export function WebsitePage() {
                   {getInitials(website.name)}
                 </div>
               )}
-              <div className="flex items-center justify-center gap-2 rounded-full border border-throne-200 bg-throne-50 px-2 py-1">
+              <div className="flex w-auto items-center justify-center gap-2 rounded-full border border-throne-200 bg-throne-50 px-2 py-1">
                 <button
                   className={cn(
                     'inline-flex h-8 w-8 items-center justify-center rounded-full border border-throne-200 bg-white',
@@ -169,9 +170,9 @@ export function WebsitePage() {
 
             {/* Info */}
             <div className="flex-1 min-w-0 space-y-3">
-              <div className="flex items-start justify-between gap-3 flex-wrap">
+               <div className="flex flex-col lg:flex-row items-start justify-between gap-3">
                 <div>
-                  <h1 className="text-2xl sm:text-3xl font-bold text-throne-900">{website.name}</h1>
+                  <h1 className="text-2xl sm:text-3xl font-bold text-throne-900 break-words">{website.name}</h1>
                   <a
                     href={website.url}
                     target="_blank"
@@ -181,8 +182,18 @@ export function WebsitePage() {
                     {website.url}
                   </a>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {website.featured && <Badge variant="warning">⭐ Destaque</Badge>}
+                 <div className="flex items-center gap-2 flex-wrap w-full lg:w-auto">
+                  <ReportMenu
+                    targetType="website"
+                    targetId={website.id}
+                    websiteName={website.name}
+                    websiteUrl={website.url}
+                    websiteDescription={website.description}
+                    websiteCategoryName={website.category_name}
+                    websiteLogoUrl={website.logo_url}
+                    websiteScreenshotUrl={website.screenshot_url}
+                    websiteMetadata={website.metadata}
+                  />
                   {website.category_name && (
                     <Link to={`/categoria/${website.category_slug ?? ''}`}>
                       <Badge variant="default">{website.category_name}</Badge>
@@ -191,58 +202,60 @@ export function WebsitePage() {
                 </div>
               </div>
 
-              {website.description && (
-                <p className="text-throne-600 leading-relaxed">{website.description}</p>
-              )}
+            </div>
+          </div>
 
-              {!isAuthenticated && (
-                <button className="text-sm text-crown-600 hover:text-crown-700" onClick={() => navigate('/entrar')}>
-                  Entrar para votar
-                </button>
-              )}
+          <div className="mt-4 space-y-3">
+            {website.description && (
+              <p className="text-throne-600 leading-relaxed break-words text-[15px]">{website.description}</p>
+            )}
 
-              {/* Meta */}
-              <div className="flex items-center gap-4 text-sm text-throne-400 flex-wrap">
+            {!isAuthenticated && (
+              <button className="text-sm text-crown-600 hover:text-crown-700" onClick={() => navigate('/entrar')}>
+                Entrar para votar
+              </button>
+            )}
+
+            <div className="grid gap-2 text-sm text-throne-400 sm:grid-cols-2">
+              <span className="flex items-center gap-1">
+                <CalendarIcon className="h-4 w-4" />
+                Adicionado a {formatDate(website.created_at)}
+              </span>
+              {metadata?.author && (
+                <span className="flex items-center gap-1">
+                  <UserIcon className="h-4 w-4" />
+                  {metadata?.author}
+                </span>
+              )}
+              {launchLabel && (
                 <span className="flex items-center gap-1">
                   <CalendarIcon className="h-4 w-4" />
-                  Adicionado a {formatDate(website.created_at)}
+                  Lançado: {launchLabel}
                 </span>
-                {metadata?.author && (
-                  <span className="flex items-center gap-1">
-                    <UserIcon className="h-4 w-4" />
-                    {metadata?.author}
-                  </span>
-                )}
-                {launchLabel && (
-                  <span className="flex items-center gap-1">
-                    <CalendarIcon className="h-4 w-4" />
-                    Lançado: {launchLabel}
-                  </span>
-                )}
-                {languagesLabel && (
-                  <span className="flex items-center gap-1">
-                    <CodeIcon className="h-4 w-4" />
-                    {languagesLabel}
-                  </span>
-                )}
-                {isOpenSource && (
-                  <span className="flex items-center gap-1">
-                    <GithubIcon className="h-4 w-4" />
-                    {sourceUrl ? (
-                      <a
-                        href={sourceUrl}
-                        className="text-crown-600 hover:text-crown-700"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Código aberto
-                      </a>
-                    ) : (
-                      'Código aberto'
-                    )}
-                  </span>
-                )}
-              </div>
+              )}
+              {languagesLabel && (
+                <span className="flex items-center gap-1">
+                  <CodeIcon className="h-4 w-4" />
+                  {languagesLabel}
+                </span>
+              )}
+              {isOpenSource && (
+                <span className="flex items-center gap-1">
+                  <GithubIcon className="h-4 w-4" />
+                  {sourceUrl ? (
+                    <a
+                      href={sourceUrl}
+                      className="text-crown-600 hover:text-crown-700"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Código aberto
+                    </a>
+                  ) : (
+                    'Código aberto'
+                  )}
+                </span>
+              )}
             </div>
           </div>
 
@@ -252,11 +265,37 @@ export function WebsitePage() {
               href={website.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-primary px-8 py-3 text-base"
+              className="btn-primary w-full sm:w-auto px-8 py-3 text-base justify-center"
             >
               <ExternalLinkIcon className="h-5 w-5" />
               Visitar Website
             </a>
+          </div>
+
+          <div className="mt-6 space-y-4 md:hidden">
+            <h2 className="text-lg font-semibold text-throne-900">🔗 Websites Relacionados</h2>
+            {relatedLoading ? (
+              <div className="grid gap-3 sm:grid-cols-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="card h-40 animate-pulse bg-throne-100" />
+                ))}
+              </div>
+            ) : relatedWebsites.filter((w) => w.id !== id).length === 0 ? (
+              <EmptyState
+                icon="🔗"
+                title="Sem websites relacionados"
+                description="Ainda não há outros websites nesta categoria."
+              />
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-3">
+                {relatedWebsites
+                  .filter((w) => w.id !== id)
+                  .slice(0, 3)
+                  .map((site) => (
+                    <WebsiteCard key={site.id} website={site} />
+                  ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -302,12 +341,12 @@ export function WebsitePage() {
         />
 
         {/* Related websites */}
-        <section>
+        <section className="hidden md:block">
           <h2 className="text-xl font-bold text-throne-900 mb-5">
             🔗 Websites Relacionados
           </h2>
           {relatedLoading ? (
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-3">
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="card h-40 animate-pulse bg-throne-100" />
               ))}
@@ -384,13 +423,13 @@ function CommentsSection({
   };
 
   return (
-    <div className="card p-6 space-y-5">
+    <div className="card p-4 sm:p-6 space-y-3 sm:space-y-4">
       <div className="flex items-start justify-between gap-2">
         <div>
           <h2 className="text-lg font-semibold text-throne-800 flex items-center gap-2">
             <span>💬</span> Comentários
           </h2>
-          <p className="text-sm text-throne-500">
+            <p className="text-xs sm:text-sm text-throne-500">
             {totalComments > 0 ? `${totalComments} comentário${totalComments > 1 ? 's' : ''}` : 'Ainda sem comentários.'}
           </p>
         </div>
@@ -515,20 +554,21 @@ function CommentItem({
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-start gap-3">
+      <div className="space-y-1.5">
+      <div className="flex items-start gap-2">
         <AvatarBubble name={comment.user.name} avatarUrl={comment.user.avatar_url} />
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="font-semibold text-throne-800">{comment.user.name}</p>
-            <span className="text-xs text-throne-400">{formatDate(comment.created_at)}</span>
-            {comment.kind && (
+            <span className="text-xs text-throne-400">{formatRelativeDate(comment.created_at)}</span>
+            {comment.kind && !comment.parent_id && (
               <span className="rounded-full bg-throne-100 px-2 py-0.5 text-[11px] font-medium text-throne-600">
                 {getCommentKindLabel(comment.kind)}
               </span>
             )}
+            <ReportMenu targetType="comment" targetId={comment.id} className="ml-auto" />
           </div>
-          <p className="text-throne-700 leading-relaxed">{comment.content}</p>
+          <p className="text-throne-700 leading-relaxed break-words">{comment.content}</p>
           <div className="mt-2 flex items-center gap-3 text-sm text-throne-500 flex-wrap">
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-2 rounded-full bg-throne-50 px-2 py-1 text-xs text-throne-600">

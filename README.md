@@ -164,17 +164,17 @@ CREATE TABLE category_suggestions (
 - [x] Painel de "minhas contribuições"
 - [x] Notificações de estado (aprovado/rejeitado)
 ### Fase 5 — Comparativos Diários
-- [ ] Geração automática de comparativos (Cron via Workers)
-- [ ] Página do comparativo do dia
-- [ ] Sistema de votação
-- [ ] Histórico de comparativos passados
-- [ ] Estatísticas de vitórias por website
+- [x] Geração automática de comparativos (Cron via Workers)
+- [x] Página do comparativo do dia
+- [x] Sistema de votação
+- [x] Histórico de comparativos passados
+- [x] Estatísticas de vitórias por website
 ### Fase 6 — Moderação
-- [ ] Sistema de denúncias
+- [x] Sistema de denúncias
 - [ ] Painel de administração
 - [ ] Aprovação/rejeição de websites
 - [ ] Aprovação/rejeição de categorias
-- [ ] Gestão de denúncias
+- [x] Gestão de denúncias
 - [ ] Gestão de utilizadores
 ### Fase 7 — Refinamentos
 - [ ] Pesquisa global (websites + categorias)
@@ -280,15 +280,16 @@ npm run db:migrate
 > Tip: não guardes segredos no `wrangler.toml`; usa Secrets no Pages.
 
 ### Google Auth (One Tap / Sign In)
-- Frontend espera `VITE_GOOGLE_CLIENT_ID` (definir em Pages → Settings → Environment variables). Usa o mesmo Client ID configurado na Google Cloud Console.
+- Frontend espera `GOOGLE_CLIENT_ID` (definir em Pages → Settings → Environment variables). Usa o mesmo Client ID configurado na Google Cloud Console.
 - Client type: OAuth 2.0 (Web). Em **Authorized JavaScript origins** adiciona os domínios do site (ex.: `https://<teu>.pages.dev` e o domínio custom). O flow usado (`tokeninfo` com `id_token`) não requer redirect URI dedicado, mas podes adicionar `https://<teu-dominio>/` como precaução.
 - Endpoint da API: `POST /api/auth/google` recebe `{ id_token }` (o componente `GoogleLoginButton` trata de enviar o token).
 - Se precisares de depuração adicional da API, define `DEBUG_LOGS=true` nas variáveis (apenas para uso temporário).
 
 ### Próxima fase
-- Fase 5 — Comparativos Diários (por iniciar: geração automática, página diária, votação, histórico e estatísticas).
+- Fase 6 — Moderação (sistema de denúncias, painel de administração e gestão de conteúdos/utilizadores).
 
 ## 🌱 Seed de dados rápido
 - Executa `npm run db:migrate` e depois `npm run db:seed` para popular categorias e exemplos.
 - Utilizador demo: `demo@trono.local` com password `Password123` (já criada no seed) para testar submissões/estado.
+- O seed agora inclui também: comparativos diários + votos, ideias + features + votos, comentários em vários websites e notificações.
 - ⚠️ Estes dados e credenciais são apenas para desenvolvimento/teste. **Não** correr o seed em produção nem reutilizar a conta demo em ambientes reais.

@@ -1,16 +1,21 @@
 import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { cn } from '@/lib/utils';
+import { cn, getInitials } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CategoryCard } from '@/components/features/CategoryCard';
 import { WebsiteCard } from '@/components/features/WebsiteCard';
 import { useCategories } from '@/hooks/useCategories';
 import { useWebsites } from '@/hooks/useWebsites';
+import { useTodayComparison, useVoteComparison } from '@/hooks/useComparisons';
+import { useAuthStore } from '@/stores/authStore';
+import { useIdeas } from '@/hooks/useIdeas';
+import type { Category } from '@/types';
 
 export function HomePage() {
   const categoriesRef = useRef<HTMLElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuthStore();
 
   const { categories, isLoading: categoriesLoading, error: categoriesError } = useCategories();
   const { websites: featuredWebsites, isLoading: featuredLoading } = useWebsites({
@@ -21,8 +26,12 @@ export function HomePage() {
     sort: 'recent',
     perPage: 4,
   });
+  const { ideas } = useIdeas();
+  const { comparison, isLoading: comparisonLoading } = useTodayComparison();
+  const voteComparison = useVoteComparison();
 
   const totalWebsites = categories.reduce((sum, c) => sum + (c.websiteCount ?? 0), 0);
+  const totalCategories = countAllCategories(categories);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,9 +48,8 @@ export function HomePage() {
     <div>
       {/* Hero */}
       <section className="bg-gradient-to-b from-crown-50 to-white border-b border-throne-100">
-        <div className="container-app py-20 text-center">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-throne-900 mb-4 leading-tight">
-            👑{' '}
+        <div className="container-app py-10 text-center">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-throne-900 mb-3 leading-tight">
             <span>
               <span>Trono dos</span>{' '}
               <span className="text-crown-500">Websites</span>
@@ -67,16 +75,83 @@ export function HomePage() {
           </form>
 
           {/* CTAs */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button onClick={scrollToCategories} className="btn-primary px-6 py-3 text-base">
-              <GridIcon className="h-5 w-5" />
+          <div className="flex flex-row items-center justify-center gap-3">
+            <button onClick={scrollToCategories} className="btn-primary px-3 py-2 text-sm">
+              <GridIcon className="h-4 w-4" />
               Explorar Categorias
             </button>
-            <Link to="/propor" className="btn-secondary px-6 py-3 text-base">
-              <PlusIcon className="h-5 w-5" />
+            <Link to="/propor" className="btn-secondary px-3 py-2 text-sm">
+              <PlusIcon className="h-4 w-4" />
               Propor Website
             </Link>
           </div>
+        </div>
+      </section>
+
+      {/* Daily comparison battle */}
+      <section className="border-b border-throne-100 bg-white">
+        <div className="container-app py-8">
+          <SectionHeader
+            title="Batalha do Dia"
+            subtitle="Escolhe o teu favorito"
+            emoji="⚔️"
+          />
+
+          {comparisonLoading ? (
+            <div className="card h-32 animate-pulse bg-throne-100" />
+          ) : !comparison ? (
+            <EmptyState
+              icon="⚖️"
+              title="Comparativo indisponível"
+              description="O comparativo diário será publicado em breve."
+            />
+          ) : (
+            <div className="card p-4">
+              <div className="grid items-center gap-3 md:grid-cols-[1fr_auto_1fr]">
+                <BattleSite
+                  name={comparison.website_a.name}
+                  logoUrl={comparison.website_a.logo_url}
+                  score={comparison.votes_a}
+                  selected={comparison.user_vote === comparison.website_a.id}
+                />
+                <div className="flex flex-col items-center gap-2">
+                  <div className="text-center text-throne-500 font-bold">VS</div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className={cn('btn-primary btn-sm', voteComparison.isPending && 'opacity-60 cursor-not-allowed')}
+                      onClick={() =>
+                        isAuthenticated
+                          ? voteComparison.mutate({ comparisonId: comparison.id, votedFor: comparison.website_a.id })
+                          : navigate('/entrar')
+                      }
+                      disabled={voteComparison.isPending}
+                    >
+                      <span className="md:hidden">↑ Votar</span>
+                      <span className="hidden md:inline">← Votar</span>
+                    </button>
+                    <button
+                      className={cn('btn-primary btn-sm', voteComparison.isPending && 'opacity-60 cursor-not-allowed')}
+                      onClick={() =>
+                        isAuthenticated
+                          ? voteComparison.mutate({ comparisonId: comparison.id, votedFor: comparison.website_b.id })
+                          : navigate('/entrar')
+                      }
+                      disabled={voteComparison.isPending}
+                    >
+                      <span className="md:hidden">Votar ↓</span>
+                      <span className="hidden md:inline">Votar →</span>
+                    </button>
+                  </div>
+                </div>
+                <BattleSite
+                  name={comparison.website_b.name}
+                  logoUrl={comparison.website_b.logo_url}
+                  score={comparison.votes_b}
+                  selected={comparison.user_vote === comparison.website_b.id}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -84,15 +159,15 @@ export function HomePage() {
       <section className="border-b border-throne-100 bg-white">
         <div className="container-app py-6">
           <div className="grid grid-cols-3 gap-4 text-center">
-            <Stat icon="📂" value={String(categories.length)} label="categorias" />
+            <Stat icon="📂" value={String(totalCategories)} label="categorias" />
             <Stat icon="🌐" value={String(totalWebsites)} label="websites" />
-            <Stat icon="🇵🇹" value="100%" label="para portugueses" />
+            <Stat icon="💡" value={String(ideas.length)} label="ideias" />
           </div>
         </div>
       </section>
 
       {/* Categories */}
-      <section ref={categoriesRef} id="categorias" className="py-16">
+      <section ref={categoriesRef} id="categorias" className="py-8">
         <div className="container-app">
           <SectionHeader
             title="Categorias"
@@ -125,7 +200,7 @@ export function HomePage() {
       </section>
 
       {/* Featured websites */}
-      <section className="py-16 bg-throne-50">
+      <section className="py-8 bg-throne-50">
         <div className="container-app">
           <SectionHeader
             title="Em Destaque"
@@ -148,7 +223,7 @@ export function HomePage() {
       </section>
 
       {/* Recent additions */}
-      <section className="py-16">
+      <section className="py-8">
         <div className="container-app">
           <SectionHeader
             title="Adicionados Recentemente"
@@ -169,6 +244,36 @@ export function HomePage() {
           )}
         </div>
       </section>
+    </div>
+  );
+}
+
+function BattleSite({
+  name,
+  logoUrl,
+  score,
+  selected,
+}: {
+  name: string;
+  logoUrl: string | null;
+  score: number;
+  selected: boolean;
+}) {
+  return (
+    <div className={cn('rounded-xl border p-3', selected ? 'border-crown-400 bg-crown-50' : 'border-throne-200')}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          {logoUrl ? (
+            <img src={logoUrl} alt={`Logo de ${name}`} className="h-10 w-10 rounded-lg object-cover border border-throne-200" />
+          ) : (
+            <div className="h-10 w-10 rounded-lg bg-crown-100 text-crown-700 font-semibold flex items-center justify-center">
+              {getInitials(name)}
+            </div>
+          )}
+          <div className="truncate font-medium text-throne-900">{name}</div>
+        </div>
+      </div>
+      <div className="mt-2 text-xs text-throne-500">Votos: {score}</div>
     </div>
   );
 }
@@ -219,6 +324,10 @@ function LoadingGrid({ cols = 4 }: { cols?: number }) {
       ))}
     </div>
   );
+}
+
+function countAllCategories(items: Category[]): number {
+  return items.reduce((sum, item) => sum + 1 + countAllCategories(item.children ?? []), 0);
 }
 
 // Icons

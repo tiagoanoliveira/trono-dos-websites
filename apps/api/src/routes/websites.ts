@@ -502,6 +502,41 @@ websitesRouter.get('/mine', requireAuth, async (c) => {
   }
 });
 
+websitesRouter.get('/pending', requireAuth, async (c) => {
+  try {
+    const role = c.get('userRole');
+    if (role !== 'admin' && role !== 'moderator') {
+      return c.json(createError('FORBIDDEN', 'Sem permissões para moderar'), 403);
+    }
+
+    const url = new URL(c.req.url);
+    const { page, perPage, offset } = getPaginationParams(url);
+
+    const countRow = await c.env.DB.prepare(
+      "SELECT COUNT(*) AS total FROM websites WHERE status = 'pending'",
+    )
+      .first<CountRow>();
+
+    const rows = await c.env.DB.prepare(
+      `SELECT w.*, cat.name AS category_name, cat.slug AS category_slug
+       FROM websites w
+       LEFT JOIN categories cat ON cat.id = w.category_id
+       WHERE w.status = 'pending'
+       ORDER BY w.created_at DESC
+       LIMIT ? OFFSET ?`,
+    )
+      .bind(perPage, offset)
+      .all<WebsiteRow>()
+      .then((r) => r.results);
+
+    const meta = buildPaginationMeta(countRow?.total ?? 0, page, perPage);
+    return c.json(createSuccess(rows, meta));
+  } catch (err) {
+    console.error('[websites GET /pending]', err);
+    return c.json(createError('INTERNAL_ERROR', 'Não foi possível carregar websites pendentes'), 500);
+  }
+});
+
 websitesRouter.get('/', optionalAuth, async (c) => {
   try {
     const url = new URL(c.req.url);

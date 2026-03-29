@@ -5,7 +5,8 @@ import { generateId, createSuccess, createError } from '../utils/helpers';
 import { requireAuth, type AuthContext } from '../middleware/auth';
 import { buildAuthCookie, clearAuthCookie } from '../utils/authCookie';
 import { isAllowedUploadUrl } from '../utils/uploadUrl';
-import { sendPasswordResetEmail, sendRegistrationEmail } from '../services/email';
+import { sendPasswordResetEmail, sendRegistrationEmail, sendVerificationEmail } from '../services/email';
+import { ensureUserSecurityColumns } from '../utils/userSchema';
 
 type DbUser = {
   id: string;
@@ -15,6 +16,10 @@ type DbUser = {
   avatar_url: string | null;
   role: string;
   google_id: string | null;
+  is_blocked?: number | null;
+  email_verified?: number | null;
+  email_verification_token?: string | null;
+  email_verification_sent_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -29,6 +34,8 @@ function formatUser(user: DbUser) {
     avatar_url: user.avatar_url,
     role: user.role,
     google_id: user.google_id !== null,
+    is_blocked: Boolean(user.is_blocked),
+    email_verified: Boolean(user.email_verified),
     created_at: user.created_at,
   };
 }
@@ -36,6 +43,7 @@ function formatUser(user: DbUser) {
 export const authRouter = new Hono<{ Bindings: Env } & AuthContext>();
 
 authRouter.post('/register', async (c) => {
+  await ensureUserSecurityColumns(c.env.DB);
   let body: { email?: unknown; name?: unknown; password?: unknown };
   try {
     body = await c.req.json();
@@ -77,11 +85,16 @@ authRouter.post('/register', async (c) => {
 
   const id = generateId();
   const passwordHash = await hashPassword(password);
+  const verificationToken = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 
   await c.env.DB.prepare(
-    'INSERT INTO users (id, email, name, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
+    `INSERT INTO users (
+      id, email, name, password_hash, role, is_blocked, email_verified, email_verification_token, email_verification_sent_at, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, 0, 0, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
   )
-    .bind(id, email.toLowerCase(), name.trim(), passwordHash, 'user')
+    .bind(id, email.toLowerCase(), name.trim(), passwordHash, 'user', verificationToken)
     .run();
 
   const user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?')
@@ -100,10 +113,12 @@ authRouter.post('/register', async (c) => {
 
   c.header('Set-Cookie', buildAuthCookie(token, c.env.ENVIRONMENT, JWT_EXPIRES));
   await sendRegistrationEmail(c.env, user.email, user.name);
+  await sendVerificationEmail(c.env, user.email, verificationToken);
   return c.json(createSuccess({ token, user: formatUser(user) }), 201);
 });
 
 authRouter.post('/login', async (c) => {
+  await ensureUserSecurityColumns(c.env.DB);
   let body: { email?: unknown; password?: unknown };
   try {
     body = await c.req.json();
@@ -123,6 +138,9 @@ authRouter.post('/login', async (c) => {
 
   if (!user || !user.password_hash) {
     return c.json(createError('INVALID_CREDENTIALS', 'Credenciais inválidas'), 401);
+  }
+  if (user.is_blocked) {
+    return c.json(createError('ACCOUNT_BLOCKED', 'Conta bloqueada'), 403);
   }
 
   const valid = await verifyPassword(password, user.password_hash);
@@ -146,6 +164,7 @@ authRouter.post('/logout', async (c) => {
 });
 
 authRouter.get('/me', requireAuth, async (c) => {
+  await ensureUserSecurityColumns(c.env.DB);
   const userId = c.get('userId');
 
   const user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?')
@@ -160,6 +179,7 @@ authRouter.get('/me', requireAuth, async (c) => {
 });
 
 authRouter.put('/me', requireAuth, async (c) => {
+  await ensureUserSecurityColumns(c.env.DB);
   const userId = c.get('userId');
 
   let body: { name?: unknown; avatar_url?: unknown };
@@ -214,6 +234,7 @@ authRouter.put('/me', requireAuth, async (c) => {
 });
 
 authRouter.post('/forgot-password', async (c) => {
+  await ensureUserSecurityColumns(c.env.DB);
   let body: { email?: unknown };
   try {
     body = await c.req.json();
@@ -319,6 +340,7 @@ authRouter.post('/reset-password', async (c) => {
 });
 
 authRouter.post('/google', async (c) => {
+  await ensureUserSecurityColumns(c.env.DB);
   let body: { id_token?: unknown };
   try {
     body = await c.req.json();
@@ -352,16 +374,34 @@ authRouter.post('/google', async (c) => {
     .first<DbUser>();
 
   if (user) {
-    if (!user.google_id) {
-      await c.env.DB.prepare('UPDATE users SET google_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-        .bind(sub, user.id)
+    const shouldUpdateGoogleId = !user.google_id;
+    const shouldUpdateAvatar = typeof picture === 'string' && picture.trim().length > 0 && user.avatar_url !== picture;
+    if (shouldUpdateGoogleId || shouldUpdateAvatar) {
+      const updates: string[] = [];
+      const values: Array<string> = [];
+      if (shouldUpdateGoogleId) {
+        updates.push('google_id = ?');
+        values.push(sub);
+      }
+      if (shouldUpdateAvatar) {
+        updates.push('avatar_url = ?');
+        values.push(picture);
+      }
+      updates.push('updated_at = CURRENT_TIMESTAMP');
+      values.push(user.id);
+      await c.env.DB.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`)
+        .bind(...values)
         .run();
-      user = { ...user, google_id: sub };
+      user = {
+        ...user,
+        google_id: shouldUpdateGoogleId ? sub : user.google_id,
+        avatar_url: shouldUpdateAvatar ? picture : user.avatar_url,
+      };
     }
   } else {
     const id = generateId();
     await c.env.DB.prepare(
-      'INSERT INTO users (id, email, name, avatar_url, google_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
+      'INSERT INTO users (id, email, name, avatar_url, google_id, role, is_blocked, email_verified, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
     )
       .bind(id, email.toLowerCase(), name ?? email.split('@')[0], picture ?? null, sub, 'user')
       .run();
@@ -374,6 +414,9 @@ authRouter.post('/google', async (c) => {
   if (!user) {
     return c.json(createError('INTERNAL_ERROR', 'Erro ao criar utilizador'), 500);
   }
+  if (user.is_blocked) {
+    return c.json(createError('ACCOUNT_BLOCKED', 'Conta bloqueada'), 403);
+  }
 
   const token = await createJWT(
     { sub: user.id, role: user.role, email: user.email },
@@ -383,4 +426,37 @@ authRouter.post('/google', async (c) => {
 
   c.header('Set-Cookie', buildAuthCookie(token, c.env.ENVIRONMENT, JWT_EXPIRES));
   return c.json(createSuccess({ token, user: formatUser(user) }));
+});
+
+authRouter.post('/verify-email', async (c) => {
+  await ensureUserSecurityColumns(c.env.DB);
+  let body: { token?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
+  }
+
+  const { token } = body;
+  if (typeof token !== 'string' || token.trim().length < 10) {
+    return c.json(createError('VALIDATION_ERROR', 'Token inválido'), 400);
+  }
+
+  const user = await c.env.DB.prepare(
+    'SELECT id FROM users WHERE email_verification_token = ?',
+  )
+    .bind(token.trim())
+    .first<{ id: string }>();
+
+  if (!user) {
+    return c.json(createError('INVALID_TOKEN', 'Token inválido'), 400);
+  }
+
+  await c.env.DB.prepare(
+    'UPDATE users SET email_verified = 1, email_verification_token = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+  )
+    .bind(user.id)
+    .run();
+
+  return c.json(createSuccess({ message: 'Email confirmado com sucesso' }));
 });

@@ -107,6 +107,39 @@ categoriesRouter.get('/suggestions/mine', requireAuth, async (c) => {
   }
 });
 
+categoriesRouter.get('/suggestions/pending', requireAuth, async (c) => {
+  try {
+    const role = c.get('userRole');
+    if (role !== 'admin' && role !== 'moderator') {
+      return c.json(createError('FORBIDDEN', 'Sem permissões para moderar'), 403);
+    }
+
+    const url = new URL(c.req.url);
+    const { page, perPage, offset } = getPaginationParams(url);
+
+    const countRow = await c.env.DB.prepare(
+      "SELECT COUNT(*) AS total FROM category_suggestions WHERE status = 'pending'",
+    )
+      .first<{ total: number }>();
+
+    const rows = await c.env.DB.prepare(
+      `SELECT * FROM category_suggestions
+       WHERE status = 'pending'
+       ORDER BY created_at DESC
+       LIMIT ? OFFSET ?`,
+    )
+      .bind(perPage, offset)
+      .all<CategorySuggestionRow>()
+      .then((r) => r.results);
+
+    const meta = buildPaginationMeta(countRow?.total ?? 0, page, perPage);
+    return c.json(createSuccess(rows, meta));
+  } catch (err) {
+    console.error('[categories GET /suggestions/pending]', err);
+    return c.json(createError('INTERNAL_ERROR', 'Não foi possível carregar sugestões pendentes'), 500);
+  }
+});
+
 type SerializedCategory = Omit<CategoryRow, 'website_count'> & {
   website_count: number;
   children: SerializedCategory[];

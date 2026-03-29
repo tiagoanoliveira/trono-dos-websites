@@ -39,7 +39,7 @@ export function ForgotPasswordPage() {
   };
 
   return (
-    <div className="container-app flex justify-center py-16">
+    <div className="container-app flex justify-center py-8">
       <div className="w-full max-w-md">
         <div className="card p-8 space-y-6">
           <div className="text-center space-y-2">

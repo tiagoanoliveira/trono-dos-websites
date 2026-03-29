@@ -56,7 +56,7 @@ export function useIdeaMutations() {
   const qc = useQueryClient();
 
   const createIdea = useMutation({
-    mutationFn: async (payload: { title: string; description?: string }) => {
+    mutationFn: async (payload: { title: string; description?: string; features?: string[] }) => {
       const res = await api.post<{ id: string }>('/ideas', payload);
       if (!res.success) throw new Error(res.error?.message || 'Erro ao criar ideia');
       return res.data!;
@@ -67,7 +67,8 @@ export function useIdeaMutations() {
   });
 
   const vote = useMutation({
-    mutationFn: async (payload: { ideaId: string; value: 1 | -1 }) => {
+    // value: 1 = upvote, -1 = downvote, 0 = remover voto atual
+    mutationFn: async (payload: { ideaId: string; value: 1 | -1 | 0 }) => {
       const res = await api.post('/ideas/' + payload.ideaId + '/votes', { value: payload.value });
       if (!res.success) throw new Error(res.error?.message || 'Erro ao votar');
       return res.data;
@@ -89,9 +90,27 @@ export function useIdeaMutations() {
     },
   });
 
+  const voteFeature = useMutation({
+    mutationFn: async (payload: { ideaId: string; featureId: string; value: 1 | -1 | 0 }) => {
+      const res = await api.post(
+        `/ideas/${payload.ideaId}/features/${payload.featureId}/votes`,
+        { value: payload.value },
+      );
+      if (!res.success) throw new Error(res.error?.message || 'Erro ao votar na feature');
+      return res.data;
+    },
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ['ideas', vars.ideaId] });
+    },
+  });
+
   const addComment = useMutation({
-    mutationFn: async (payload: { ideaId: string; content: string }) => {
-      const res = await api.post('/ideas/' + payload.ideaId + '/comments', { content: payload.content });
+    mutationFn: async (payload: { ideaId: string; content: string; parentId?: string | null; kind?: string }) => {
+      const res = await api.post('/ideas/' + payload.ideaId + '/comments', {
+        content: payload.content,
+        parentId: payload.parentId,
+        kind: payload.kind,
+      });
       if (!res.success) throw new Error(res.error?.message || 'Erro ao comentar');
       return res.data;
     },
@@ -101,16 +120,27 @@ export function useIdeaMutations() {
   });
 
   const claim = useMutation({
-    mutationFn: async (ideaId: string) => {
-      const res = await api.post('/ideas/' + ideaId + '/claim', {});
+    mutationFn: async (payload: {
+      ideaId: string;
+      website_url: string;
+      category_id: string;
+      website_name?: string;
+      description?: string;
+    }) => {
+      const res = await api.post('/ideas/' + payload.ideaId + '/claim', {
+        website_url: payload.website_url,
+        category_id: payload.category_id,
+        website_name: payload.website_name,
+        description: payload.description,
+      });
       if (!res.success) throw new Error(res.error?.message || 'Erro ao reclamar ideia');
       return res.data;
     },
-    onSuccess: (_, ideaId) => {
+    onSuccess: (_, payload) => {
       qc.invalidateQueries({ queryKey: ['ideas'] });
-      qc.invalidateQueries({ queryKey: ['ideas', ideaId] });
+      qc.invalidateQueries({ queryKey: ['ideas', payload.ideaId] });
     },
   });
 
-  return { createIdea, vote, addFeature, addComment, claim };
+  return { createIdea, vote, voteFeature, addFeature, addComment, claim };
 }

@@ -42,7 +42,7 @@ export function RegisterPage() {
   };
 
   return (
-    <div className="container-app flex justify-center py-16">
+    <div className="container-app flex justify-center py-8">
       <div className="w-full max-w-md">
         <div className="card p-8">
           <div className="mb-8 text-center">
@@ -61,6 +61,17 @@ export function RegisterPage() {
               {error}
             </div>
           )}
+
+          <GoogleLoginButton onSuccess={() => navigate('/')} />
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-throne-200" />
+            </div>
+            <div className="relative flex justify-center text-xs text-throne-400">
+              <span className="bg-white px-2">ou regista com email</span>
+            </div>
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -138,17 +149,6 @@ export function RegisterPage() {
               {isLoading ? 'A criar conta…' : 'Criar conta'}
             </button>
           </form>
-        </div>
-        <div className="mt-6">
-          <div className="relative my-4">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-throne-200" />
-            </div>
-            <div className="relative flex justify-center text-xs text-throne-400">
-              <span className="bg-white px-2">ou</span>
-            </div>
-          </div>
-          <GoogleLoginButton onSuccess={() => navigate('/')} />
         </div>
       </div>
     </div>

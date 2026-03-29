@@ -27,11 +27,10 @@ export function LoginPage() {
   };
 
   return (
-    <div className="container-app flex justify-center py-16">
+    <div className="container-app flex justify-center py-8">
       <div className="w-full max-w-md">
         <div className="card p-8">
           <div className="mb-8 text-center">
-            <span className="text-4xl">👑</span>
             <h1 className="mt-3 text-2xl font-bold text-throne-900">Entrar na conta</h1>
             <p className="mt-1 text-sm text-throne-500">
               Ainda não tens conta?{' '}
@@ -46,6 +45,17 @@ export function LoginPage() {
               {error}
             </div>
           )}
+
+          <GoogleLoginButton onSuccess={() => navigate('/')} />
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-throne-200" />
+            </div>
+            <div className="relative flex justify-center text-xs text-throne-400">
+              <span className="bg-white px-2">ou entra com email</span>
+            </div>
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -92,16 +102,6 @@ export function LoginPage() {
             </button>
           </form>
 
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-throne-200" />
-            </div>
-            <div className="relative flex justify-center text-xs text-throne-400">
-              <span className="bg-white px-2">ou</span>
-            </div>
-          </div>
-
-          <GoogleLoginButton onSuccess={() => navigate('/')} />
         </div>
       </div>
     </div>

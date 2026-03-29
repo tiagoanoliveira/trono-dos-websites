@@ -103,6 +103,15 @@ export function Header() {
                     >
                       Ver perfil
                     </Link>
+                    {(user.role === 'admin' || user.role === 'moderator') && (
+                      <Link
+                        to="/admin"
+                        className="block px-3 py-2 text-sm text-throne-700 hover:bg-throne-50"
+                        onClick={() => setShowUserMenu(false)}
+                      >
+                        Moderação
+                      </Link>
+                    )}
                     <button
                       onClick={async () => {
                         await logout();
@@ -128,7 +137,7 @@ export function Header() {
         <div
           className={cn(
             'overflow-hidden transition-all duration-200 md:hidden',
-            isMenuOpen ? 'max-h-64 pb-4' : 'max-h-0'
+            isMenuOpen ? 'max-h-80 pb-4' : 'max-h-0'
           )}
         >
           <form onSubmit={handleSearch} className="mb-3">
@@ -144,21 +153,26 @@ export function Header() {
             </div>
           </form>
           <div className="flex flex-col gap-2">
-            <Link to="/ideias" className="btn-ghost justify-center">
+            <Link to="/ideias" className="btn-ghost justify-center" onClick={() => setIsMenuOpen(false)}>
               Ideias
             </Link>
-            <Link to="/propor" className="btn-primary justify-center">
+            <Link to="/propor" className="btn-primary justify-center" onClick={() => setIsMenuOpen(false)}>
               <PlusIcon className="h-4 w-4" />
               Propor Website
             </Link>
-            <Link to="/propor-categoria" className="btn-secondary justify-center">
+            <Link to="/propor-categoria" className="btn-secondary justify-center" onClick={() => setIsMenuOpen(false)}>
               Propor Categoria
             </Link>
             {isAuthenticated && user ? (
               <>
-                <Link to="/perfil" className="btn-secondary justify-center">
+                <Link to="/perfil" className="btn-secondary justify-center" onClick={() => setIsMenuOpen(false)}>
                   Perfil
                 </Link>
+                {(user.role === 'admin' || user.role === 'moderator') && (
+                  <Link to="/admin" className="btn-secondary justify-center" onClick={() => setIsMenuOpen(false)}>
+                    Moderação
+                  </Link>
+                )}
                 <button
                   onClick={async () => {
                     await logout();
@@ -171,7 +185,7 @@ export function Header() {
                 </button>
               </>
             ) : (
-              <Link to="/entrar" className="btn-secondary justify-center">
+              <Link to="/entrar" className="btn-secondary justify-center" onClick={() => setIsMenuOpen(false)}>
                 Entrar
               </Link>
             )}

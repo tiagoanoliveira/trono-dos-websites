@@ -26,7 +26,7 @@ export function CategoryPage() {
   const slug = slugSegments[slugSegments.length - 1] ?? '';
   const [sort, setSort] = useState<SortOption>('rating');
   const [page, setPage] = useState(1);
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
   const queryClient = useQueryClient();
 
   const { categories, isLoading: categoriesLoading } = useCategories();
@@ -168,7 +168,7 @@ export function CategoryPage() {
         </nav>
 
         {/* Category header */}
-        <header className="flex items-start gap-4">
+        <header className="flex items-start gap-2">
           {category.icon && (
             <span className="text-5xl leading-none" aria-hidden="true">
               {category.icon}
@@ -217,7 +217,7 @@ export function CategoryPage() {
         )}
 
         {/* Filter / sort bar */}
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <p className="text-throne-500 text-sm">
             {meta ? `${meta.total} resultado${meta.total !== 1 ? 's' : ''}` : ''}
           </p>
@@ -276,7 +276,6 @@ export function CategoryPage() {
                 }}
                 voting={voteMutation.isPending && voteMutation.variables?.websiteId === site.id}
                 disabled={!isAuthenticated}
-                canSeeBreakdown={user?.role === 'admin' || (!!site.submitted_by && site.submitted_by === user?.id)}
               />
             ))}
           </div>
@@ -321,13 +320,11 @@ function WebsiteListRow({
   onVote,
   voting,
   disabled,
-  canSeeBreakdown,
 }: {
   website: Website;
   onVote: (direction: 'up' | 'down') => void;
   voting: boolean;
   disabled: boolean;
-  canSeeBreakdown: boolean;
 }) {
   const metadata = website.metadata;
   const launchLabel = formatLaunchDate(metadata?.launch_date, metadata?.launch_precision);
@@ -335,8 +332,6 @@ function WebsiteListRow({
   const isOpenSource = metadata?.is_open_source;
   const sourceUrl = metadata?.source_url;
   const score = website.score ?? 0;
-  const upvotes = website.upvotes ?? 0;
-  const downvotes = website.downvotes ?? 0;
   const userVote = website.user_vote ?? 0;
 
   return (
@@ -442,20 +437,6 @@ function WebsiteListRow({
           )}
         </div>
 
-        <div className="flex flex-wrap gap-4 text-xs text-throne-500">
-          {canSeeBreakdown && (
-            <>
-              <span className="flex items-center gap-1">
-                <ArrowUpIcon className="h-3 w-3" />
-                {upvotes} upvotes
-              </span>
-              <span className="flex items-center gap-1">
-                <ArrowDownIcon className="h-3 w-3" />
-                {downvotes} downvotes
-              </span>
-            </>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -504,21 +485,6 @@ function GithubIcon({ className }: { className?: string }) {
   );
 }
 
-function ArrowUpIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-    </svg>
-  );
-}
-
-function ArrowDownIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-    </svg>
-  );
-}
 
 function ChevronIcon({ className }: { className?: string }) {
   return (

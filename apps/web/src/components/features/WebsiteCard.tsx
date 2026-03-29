@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 import { cn, truncate, getInitials } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
 import type { Website } from '@/types';
-import { useAuthStore } from '@/stores/authStore';
 
 interface WebsiteCardProps {
   website: Website;
@@ -19,8 +18,6 @@ function getDomain(url: string): string {
 
 export function WebsiteCard({ website, className }: WebsiteCardProps) {
   const domain = getDomain(website.url);
-  const { user } = useAuthStore();
-  const canSeeBreakdown = user?.role === 'admin' || (!!website.submitted_by && website.submitted_by === user?.id);
 
   return (
     <div className={cn('card-hover flex flex-col gap-4 p-5', className)}>
@@ -61,11 +58,6 @@ export function WebsiteCard({ website, className }: WebsiteCardProps) {
               </Link>
               <p className="text-xs text-throne-400 mt-0.5 truncate">{domain}</p>
             </div>
-            {website.featured && (
-              <Badge variant="warning" size="sm" className="shrink-0">
-                ⭐ Destaque
-              </Badge>
-            )}
           </div>
 
           {/* Category */}
@@ -96,11 +88,6 @@ export function WebsiteCard({ website, className }: WebsiteCardProps) {
             <ArrowUpIcon className="h-3.5 w-3.5" />
             {website.score ?? 0}
           </span>
-          {canSeeBreakdown && (
-            <span className="text-xs text-throne-400">
-              {website.upvotes ?? 0} ↑ · {website.downvotes ?? 0} ↓
-            </span>
-          )}
         </div>
         <a
           href={website.url}
