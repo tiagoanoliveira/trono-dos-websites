@@ -29,7 +29,7 @@ export function GoogleLoginButton({ onSuccess }: GoogleLoginButtonProps) {
 
   useEffect(() => {
     if (typeof clientId !== 'string' || clientId.length === 0) {
-      setError('Configuração Google em falta');
+      setError('Em breve');
       return;
     }
 
@@ -102,7 +102,7 @@ export function GoogleLoginButton({ onSuccess }: GoogleLoginButtonProps) {
         <div ref={containerRef} className="flex justify-center" />
       ) : (
         <button type="button" className="btn-secondary w-full justify-center gap-2 opacity-60" disabled>
-          Configurar Google OAuth
+          Login com Google
         </button>
       )}
       {error && <p className="text-xs text-red-600 text-center">{error}</p>}

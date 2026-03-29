@@ -408,7 +408,7 @@ export function AdminPage() {
 
       {editingReportId && (
         <div className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-black/40 p-4" role="dialog" aria-modal="true">
-          <div className="my-6 max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-xl border border-throne-200 bg-white p-4 shadow-xl space-y-3">
+          <div className="my-6 max-h-[850dvh] w-full max-w-xl overflow-y-auto rounded-xl border border-throne-200 bg-white p-4 shadow-xl space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-throne-900">Origem da denúncia</h3>
               <button className="btn-ghost" onClick={() => setEditingReportId(null)}>Fechar</button>
