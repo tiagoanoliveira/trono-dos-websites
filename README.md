@@ -164,11 +164,11 @@ CREATE TABLE category_suggestions (
 - [x] Painel de "minhas contribuições"
 - [x] Notificações de estado (aprovado/rejeitado)
 ### Fase 5 — Comparativos Diários
-- [ ] Geração automática de comparativos (Cron via Workers)
-- [ ] Página do comparativo do dia
-- [ ] Sistema de votação
-- [ ] Histórico de comparativos passados
-- [ ] Estatísticas de vitórias por website
+- [x] Geração automática de comparativos (Cron via Workers)
+- [x] Página do comparativo do dia
+- [x] Sistema de votação
+- [x] Histórico de comparativos passados
+- [x] Estatísticas de vitórias por website
 ### Fase 6 — Moderação
 - [ ] Sistema de denúncias
 - [ ] Painel de administração
@@ -286,7 +286,7 @@ npm run db:migrate
 - Se precisares de depuração adicional da API, define `DEBUG_LOGS=true` nas variáveis (apenas para uso temporário).
 
 ### Próxima fase
-- Fase 5 — Comparativos Diários (por iniciar: geração automática, página diária, votação, histórico e estatísticas).
+- Fase 6 — Moderação (sistema de denúncias, painel de administração e gestão de conteúdos/utilizadores).
 
 ## 🌱 Seed de dados rápido
 - Executa `npm run db:migrate` e depois `npm run db:seed` para popular categorias e exemplos.

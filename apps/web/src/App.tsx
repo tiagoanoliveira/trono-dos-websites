@@ -11,6 +11,7 @@ import { ProporWebsitePage } from '@/pages/ProporWebsitePage';
 import { ProporCategoriaPage } from '@/pages/ProporCategoriaPage';
 import { IdeaHubPage } from '@/pages/IdeaHubPage';
 import { ProfilePage } from '@/pages/ProfilePage';
+import { ComparisonPage } from '@/pages/ComparisonPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 
 export default function App() {
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="propor-categoria" element={<ProporCategoriaPage />} />
         <Route path="ideias" element={<IdeaHubPage />} />
         <Route path="perfil" element={<ProfilePage />} />
+        <Route path="comparativo" element={<ComparisonPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

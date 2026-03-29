@@ -33,6 +33,39 @@ export interface Website {
   created_at: string;
 }
 
+export interface ComparisonWebsite {
+  id: string;
+  name: string;
+  url: string;
+  logo_url: string | null;
+  score: number;
+}
+
+export interface DailyComparison {
+  id: string;
+  date: string;
+  category_id: string;
+  category_name: string | null;
+  category_slug: string | null;
+  website_a: ComparisonWebsite;
+  website_b: ComparisonWebsite;
+  votes_a: number;
+  votes_b: number;
+  total_votes: number;
+  user_vote: string | null;
+  created_at: string;
+}
+
+export interface ComparisonStatsRow {
+  website_id: string;
+  website_name: string;
+  website_url: string;
+  website_logo_url: string | null;
+  wins: number;
+  losses: number;
+  appearances: number;
+}
+
 export interface WebsiteMetadata {
   author?: string | null;
   launch_date?: string | null;

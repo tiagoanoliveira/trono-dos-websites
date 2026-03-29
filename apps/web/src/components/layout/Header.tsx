@@ -50,6 +50,9 @@ export function Header() {
             <Link to="/ideias" className="btn-ghost hidden sm:inline-flex">
               Ideias
             </Link>
+            <Link to="/comparativo" className="btn-ghost hidden sm:inline-flex">
+              Comparativo
+            </Link>
             <Link to="/propor" className="btn-primary hidden sm:inline-flex">
               <PlusIcon className="h-4 w-4" />
               Propor Website
@@ -146,6 +149,9 @@ export function Header() {
           <div className="flex flex-col gap-2">
             <Link to="/ideias" className="btn-ghost justify-center">
               Ideias
+            </Link>
+            <Link to="/comparativo" className="btn-ghost justify-center">
+              Comparativo
             </Link>
             <Link to="/propor" className="btn-primary justify-center">
               <PlusIcon className="h-4 w-4" />
