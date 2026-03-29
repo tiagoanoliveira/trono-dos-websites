@@ -103,6 +103,15 @@ export function Header() {
                     >
                       Ver perfil
                     </Link>
+                    {(user.role === 'admin' || user.role === 'moderator') && (
+                      <Link
+                        to="/admin"
+                        className="block px-3 py-2 text-sm text-throne-700 hover:bg-throne-50"
+                        onClick={() => setShowUserMenu(false)}
+                      >
+                        Moderação
+                      </Link>
+                    )}
                     <button
                       onClick={async () => {
                         await logout();
@@ -159,6 +168,11 @@ export function Header() {
                 <Link to="/perfil" className="btn-secondary justify-center">
                   Perfil
                 </Link>
+                {(user.role === 'admin' || user.role === 'moderator') && (
+                  <Link to="/admin" className="btn-secondary justify-center">
+                    Moderação
+                  </Link>
+                )}
                 <button
                   onClick={async () => {
                     await logout();

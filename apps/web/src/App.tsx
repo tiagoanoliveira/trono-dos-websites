@@ -13,6 +13,7 @@ import { IdeaHubPage } from '@/pages/IdeaHubPage';
 import { IdeaDetailPage } from '@/pages/IdeaDetailPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { ComparisonPage } from '@/pages/ComparisonPage';
+import { AdminPage } from '@/pages/AdminPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="ideias/:id" element={<IdeaDetailPage />} />
         <Route path="perfil" element={<ProfilePage />} />
         <Route path="comparativo" element={<ComparisonPage />} />
+        <Route path="admin" element={<AdminPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
