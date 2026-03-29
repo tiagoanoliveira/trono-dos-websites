@@ -205,6 +205,7 @@ function ComparisonOptionCard({
             target="_blank"
             rel="noopener noreferrer"
             className="btn-secondary flex-1 justify-center"
+            aria-label={`Pré-visualizar ${website.name} (abre em nova aba)`}
           >
             Pré-visualizar
           </a>
