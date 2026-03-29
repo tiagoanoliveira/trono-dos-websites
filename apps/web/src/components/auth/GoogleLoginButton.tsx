@@ -25,7 +25,7 @@ export function GoogleLoginButton({ onSuccess }: GoogleLoginButtonProps) {
   const [error, setError] = useState<string | null>(null);
   const { loginWithGoogle } = useAuthStore();
 
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const clientId = import.meta.env.GOOGLE_CLIENT_ID;
 
   useEffect(() => {
     if (typeof clientId !== 'string' || clientId.length === 0) {

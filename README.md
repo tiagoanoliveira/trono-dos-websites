@@ -280,7 +280,7 @@ npm run db:migrate
 > Tip: não guardes segredos no `wrangler.toml`; usa Secrets no Pages.
 
 ### Google Auth (One Tap / Sign In)
-- Frontend espera `VITE_GOOGLE_CLIENT_ID` (definir em Pages → Settings → Environment variables). Usa o mesmo Client ID configurado na Google Cloud Console.
+- Frontend espera `GOOGLE_CLIENT_ID` (definir em Pages → Settings → Environment variables). Usa o mesmo Client ID configurado na Google Cloud Console.
 - Client type: OAuth 2.0 (Web). Em **Authorized JavaScript origins** adiciona os domínios do site (ex.: `https://<teu>.pages.dev` e o domínio custom). O flow usado (`tokeninfo` com `id_token`) não requer redirect URI dedicado, mas podes adicionar `https://<teu-dominio>/` como precaução.
 - Endpoint da API: `POST /api/auth/google` recebe `{ id_token }` (o componente `GoogleLoginButton` trata de enviar o token).
 - Se precisares de depuração adicional da API, define `DEBUG_LOGS=true` nas variáveis (apenas para uso temporário).
