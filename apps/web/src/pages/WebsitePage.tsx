@@ -123,9 +123,9 @@ export function WebsitePage() {
 
         {/* Header card */}
         <div className="card p-4 sm:p-6">
-          <div className="flex flex-col md:flex-row items-start gap-4 sm:gap-6">
+          <div className="flex items-start gap-4 sm:gap-6">
             {/* Logo */}
-            <div className="w-full md:w-auto shrink-0 space-y-3">
+            <div className="w-auto shrink-0 space-y-3">
               {website.logo_url ? (
                 <img
                   src={website.logo_url}
@@ -137,7 +137,7 @@ export function WebsitePage() {
                   {getInitials(website.name)}
                 </div>
               )}
-              <div className="flex items-center justify-center gap-2 rounded-full border border-throne-200 bg-throne-50 px-2 py-1 w-full md:w-auto">
+              <div className="flex w-auto items-center justify-center gap-2 rounded-full border border-throne-200 bg-throne-50 px-2 py-1">
                 <button
                   className={cn(
                     'inline-flex h-8 w-8 items-center justify-center rounded-full border border-throne-200 bg-white',
