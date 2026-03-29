@@ -274,9 +274,9 @@ function IdeaCommentItem({
           <div className="flex items-center gap-2">
             <p className="font-semibold text-throne-800">{comment.user.name}</p>
             <span className="text-xs text-throne-400">{formatDate(comment.created_at)}</span>
-            {!!comment.kind && !comment.parent_id && (
+            {comment.kind && !comment.parent_id && (
               <span className="rounded-full bg-throne-100 px-2 py-0.5 text-[11px] font-medium text-throne-600">
-                {comment.kind}
+                {getCommentKindLabel(comment.kind)}
               </span>
             )}
           </div>
@@ -360,4 +360,21 @@ function IdeaCommentItem({
       )}
     </div>
   );
+}
+
+function getCommentKindLabel(kind?: string | null) {
+  switch (kind) {
+    case 'opinion':
+      return 'Opinião';
+    case 'suggestion':
+      return 'Sugestão';
+    case 'issue':
+      return 'Erro/bug';
+    case 'praise':
+      return 'Elogio';
+    case 'other':
+      return 'Outro';
+    default:
+      return 'Comentário';
+  }
 }

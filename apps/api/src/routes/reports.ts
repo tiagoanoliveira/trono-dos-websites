@@ -18,10 +18,17 @@ type ReportRow = {
 
 const ALLOWED_TARGET_TYPES = new Set(['website', 'comment', 'user', 'idea']);
 const ALLOWED_STATUSES = new Set(['pending', 'reviewed', 'resolved', 'dismissed']);
+let reportsSchemaEnsured = false;
 
 export const reportsRouter = new Hono<{ Bindings: Env } & AuthContext>();
 
 async function ensureReportsTable(db: D1Database) {
+  if (reportsSchemaEnsured) return;
+  // target_type values:
+  // - website: denúncia sobre um website listado
+  // - comment: denúncia sobre comentário (site ou ideia)
+  // - user: denúncia sobre comportamento de utilizador
+  // - idea: denúncia sobre conteúdo de ideia
   await db.prepare(
     `CREATE TABLE IF NOT EXISTS reports (
       id TEXT PRIMARY KEY,
@@ -36,6 +43,7 @@ async function ensureReportsTable(db: D1Database) {
       resolved_at TEXT
     )`,
   ).run();
+  reportsSchemaEnsured = true;
 }
 
 reportsRouter.post('/', requireAuth, async (c) => {

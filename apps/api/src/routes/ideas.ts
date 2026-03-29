@@ -63,8 +63,11 @@ const APPROVAL_THRESHOLD = 10;
 const MIN_COMMENT_LENGTH = 3;
 const MAX_COMMENT_LENGTH = 1000;
 const COMMENT_KINDS = new Set(['opinion', 'suggestion', 'issue', 'praise', 'other', 'general']);
+let ideaFeatureVotesSchemaEnsured = false;
+let ideaCommentsSchemaEnsured = false;
 
 async function ensureIdeaFeatureVotesTable(db: D1Database) {
+  if (ideaFeatureVotesSchemaEnsured) return;
   // TODO: Remover este fallback quando todos os ambientes tiverem a migração 006 aplicada.
   await db.prepare(
     `CREATE TABLE IF NOT EXISTS idea_feature_votes (
@@ -78,9 +81,12 @@ async function ensureIdeaFeatureVotesTable(db: D1Database) {
   ).run();
   await db.prepare('CREATE INDEX IF NOT EXISTS idx_idea_feature_votes_feature ON idea_feature_votes(feature_id)').run();
   await db.prepare('CREATE INDEX IF NOT EXISTS idx_idea_feature_votes_user ON idea_feature_votes(user_id)').run();
+  ideaFeatureVotesSchemaEnsured = true;
 }
 
 async function ensureIdeaCommentsSchema(db: D1Database) {
+  if (ideaCommentsSchemaEnsured) return;
+  // TODO: substituir por migração 007 dedicada e remover este fallback após rollout completo.
   const columns = await db.prepare('PRAGMA table_info(idea_comments)')
     .all<{ name: string }>()
     .then((r) => r.results.map((row) => row.name));
@@ -110,6 +116,7 @@ async function ensureIdeaCommentsSchema(db: D1Database) {
   ).run();
   await db.prepare('CREATE INDEX IF NOT EXISTS idx_idea_comment_votes_comment ON idea_comment_votes(comment_id)').run();
   await db.prepare('CREATE INDEX IF NOT EXISTS idx_idea_comment_votes_user ON idea_comment_votes(user_id)').run();
+  ideaCommentsSchemaEnsured = true;
 }
 
 function resolveStatus(row: IdeaRow) {
