@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Spinner } from '@/components/ui/Spinner';
+import { ReportMenu } from '@/components/ui/ReportMenu';
 import { cn, formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { useIdeaDetail, useIdeaMutations } from '@/hooks/useIdeas';
@@ -60,9 +61,12 @@ export function IdeaDetailPage() {
             <h1 className="text-2xl sm:text-3xl font-bold text-throne-900">{idea.title}</h1>
             {idea.description && <p className="text-throne-600 mt-2">{idea.description}</p>}
           </div>
-          <Badge variant={idea.status === 'approved' ? 'success' : idea.status === 'closed' ? 'warning' : 'default'}>
-            {idea.status}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <ReportMenu targetType="idea" targetId={idea.id} />
+            <Badge variant={idea.status === 'approved' ? 'success' : idea.status === 'closed' ? 'warning' : 'default'}>
+              {idea.status}
+            </Badge>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-sm text-throne-600">
@@ -279,6 +283,7 @@ function IdeaCommentItem({
                 {getCommentKindLabel(comment.kind)}
               </span>
             )}
+            <ReportMenu targetType="comment" targetId={comment.id} className="ml-auto" />
           </div>
           <p className="text-throne-700 leading-relaxed">{comment.content}</p>
           <div className="mt-2 flex items-center gap-3 text-sm text-throne-500">

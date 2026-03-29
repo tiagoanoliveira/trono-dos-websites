@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { cn, truncate, getInitials } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
+import { ReportMenu } from '@/components/ui/ReportMenu';
 import type { Website } from '@/types';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -61,6 +62,7 @@ export function WebsiteCard({ website, className }: WebsiteCardProps) {
               </Link>
               <p className="text-xs text-throne-400 mt-0.5 truncate">{domain}</p>
             </div>
+            <ReportMenu targetType="website" targetId={website.id} />
             {website.featured && (
               <Badge variant="warning" size="sm" className="shrink-0">
                 ⭐ Destaque

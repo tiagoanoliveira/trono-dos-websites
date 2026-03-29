@@ -98,7 +98,7 @@ async function ensureIdeaCommentsSchema(db: D1Database) {
     await db.prepare('ALTER TABLE idea_comments ADD COLUMN status TEXT DEFAULT "visible"').run();
   }
   if (!columns.includes('updated_at')) {
-    await db.prepare('ALTER TABLE idea_comments ADD COLUMN updated_at TEXT DEFAULT CURRENT_TIMESTAMP').run();
+    await db.prepare('ALTER TABLE idea_comments ADD COLUMN updated_at TEXT').run();
   }
   if (!columns.includes('kind')) {
     await db.prepare('ALTER TABLE idea_comments ADD COLUMN kind TEXT DEFAULT "general"').run();

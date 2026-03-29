@@ -6,6 +6,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { WebsiteCard } from '@/components/features/WebsiteCard';
+import { ReportMenu } from '@/components/ui/ReportMenu';
 import { useWebsiteById, useWebsites } from '@/hooks/useWebsites';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
@@ -182,6 +183,7 @@ export function WebsitePage() {
                   </a>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
+                  <ReportMenu targetType="website" targetId={website.id} />
                   {website.featured && <Badge variant="warning">⭐ Destaque</Badge>}
                   {website.category_name && (
                     <Link to={`/categoria/${website.category_slug ?? ''}`}>
@@ -527,6 +529,7 @@ function CommentItem({
                 {getCommentKindLabel(comment.kind)}
               </span>
             )}
+            <ReportMenu targetType="comment" targetId={comment.id} className="ml-auto" />
           </div>
           <p className="text-throne-700 leading-relaxed">{comment.content}</p>
           <div className="mt-2 flex items-center gap-3 text-sm text-throne-500 flex-wrap">
