@@ -126,7 +126,8 @@ export function HomePage() {
                       }
                       disabled={voteComparison.isPending}
                     >
-                      ← Votar
+                      <span className="md:hidden">↑ Votar</span>
+                      <span className="hidden md:inline">← Votar</span>
                     </button>
                     <button
                       className={cn('btn-primary btn-sm', voteComparison.isPending && 'opacity-60 cursor-not-allowed')}
@@ -137,7 +138,8 @@ export function HomePage() {
                       }
                       disabled={voteComparison.isPending}
                     >
-                      Votar →
+                      <span className="md:hidden">Votar ↓</span>
+                      <span className="hidden md:inline">Votar →</span>
                     </button>
                   </div>
                 </div>
