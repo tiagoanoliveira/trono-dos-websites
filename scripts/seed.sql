@@ -90,19 +90,48 @@ VALUES
 
 -- Daily comparisons + votes
 INSERT OR IGNORE INTO daily_comparisons (id, date, category_id, website_a_id, website_b_id, created_at)
-VALUES
-  ('dc-today', DATE('now'), 'cat-fin', 'w-idealista', 'w-imovirtual', CURRENT_TIMESTAMP),
-  ('dc-y1', DATE('now', '-1 day'), 'cat-viagens', 'w-ryanair', 'w-tap', CURRENT_TIMESTAMP),
-  ('dc-y2', DATE('now', '-2 day'), 'cat-produtividade', 'w-notion', 'w-trello', CURRENT_TIMESTAMP);
+WITH eligible_categories AS (
+  SELECT
+    c.id AS category_id,
+    MIN(w.id) AS website_a_id,
+    MAX(w.id) AS website_b_id,
+    ROW_NUMBER() OVER (ORDER BY c.id) AS rn
+  FROM categories c
+  JOIN websites w ON w.category_id = c.id
+  WHERE w.status IN ('approved', 'active')
+  GROUP BY c.id
+  HAVING COUNT(*) >= 2
+),
+dates AS (
+  SELECT 1 AS rn, DATE('now') AS date
+  UNION ALL
+  SELECT 2, DATE('now', '-1 day')
+  UNION ALL
+  SELECT 3, DATE('now', '-2 day')
+)
+SELECT
+  'dc-seed-' || d.date || '-' || ec.category_id,
+  d.date,
+  ec.category_id,
+  ec.website_a_id,
+  ec.website_b_id,
+  CURRENT_TIMESTAMP
+FROM dates d
+JOIN eligible_categories ec ON ec.rn = d.rn;
 
 INSERT OR IGNORE INTO comparison_votes (id, comparison_id, user_id, voted_for, created_at)
-VALUES
-  ('dvv1', 'dc-today', 'u-demo', 'w-idealista', CURRENT_TIMESTAMP),
-  ('dvv2', 'dc-today', 'u-joana', 'w-imovirtual', CURRENT_TIMESTAMP),
-  ('dvv3', 'dc-today', 'u-tiago', 'w-idealista', CURRENT_TIMESTAMP),
-  ('dvv4', 'dc-y1', 'u-demo', 'w-ryanair', CURRENT_TIMESTAMP),
-  ('dvv5', 'dc-y1', 'u-joana', 'w-ryanair', CURRENT_TIMESTAMP),
-  ('dvv6', 'dc-y2', 'u-tiago', 'w-notion', CURRENT_TIMESTAMP);
+SELECT
+  'dvv-seed-' || dc.id || '-' || u.id,
+  dc.id,
+  u.id,
+  CASE
+    WHEN (LENGTH(dc.id) + LENGTH(u.id)) % 2 = 0 THEN dc.website_a_id
+    ELSE dc.website_b_id
+  END,
+  CURRENT_TIMESTAMP
+FROM daily_comparisons dc
+JOIN users u ON u.id IN ('u-demo', 'u-joana', 'u-tiago')
+WHERE dc.date BETWEEN DATE('now', '-2 day') AND DATE('now');
 
 -- Notifications
 INSERT OR IGNORE INTO notifications (id, user_id, type, title, message, entity_type, entity_id, is_read, created_at)
