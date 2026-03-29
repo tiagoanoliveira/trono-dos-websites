@@ -199,9 +199,23 @@ function ComparisonOptionCard({
         <div className="h-2 rounded-full bg-throne-100 overflow-hidden">
           <div className={cn('h-full transition-all', selected ? 'bg-crown-500' : 'bg-throne-400')} style={{ width: `${percentage}%` }} />
         </div>
-        <button className={cn('btn-primary w-full justify-center', disabled && 'opacity-60 cursor-not-allowed')} onClick={onVote} disabled={disabled}>
-          {selected ? 'Votado' : 'Votar'}
-        </button>
+        <div className="flex gap-2">
+          <a
+            href={website.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-secondary flex-1 justify-center"
+          >
+            Pré-visualizar
+          </a>
+          <button
+            className={cn('btn-primary flex-1 justify-center', disabled && 'opacity-60 cursor-not-allowed')}
+            onClick={onVote}
+            disabled={disabled}
+          >
+            {selected ? 'Votado' : 'Votar'}
+          </button>
+        </div>
       </div>
     </article>
   );
