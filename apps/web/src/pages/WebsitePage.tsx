@@ -123,9 +123,9 @@ export function WebsitePage() {
 
         {/* Header card */}
         <div className="card p-4 sm:p-8">
-          <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
+          <div className="flex flex-col md:flex-row items-start gap-4 sm:gap-6">
             {/* Logo */}
-            <div className="shrink-0 space-y-3">
+            <div className="w-full md:w-auto shrink-0 space-y-3">
               {website.logo_url ? (
                 <img
                   src={website.logo_url}
@@ -137,7 +137,7 @@ export function WebsitePage() {
                   {getInitials(website.name)}
                 </div>
               )}
-              <div className="flex items-center justify-center gap-2 rounded-full border border-throne-200 bg-throne-50 px-2 py-1 w-full sm:w-auto">
+              <div className="flex items-center justify-center gap-2 rounded-full border border-throne-200 bg-throne-50 px-2 py-1 w-full md:w-auto">
                 <button
                   className={cn(
                     'inline-flex h-8 w-8 items-center justify-center rounded-full border border-throne-200 bg-white',
@@ -170,9 +170,9 @@ export function WebsitePage() {
 
             {/* Info */}
             <div className="flex-1 min-w-0 space-y-3">
-               <div className="flex flex-col sm:flex-row items-start justify-between gap-3 flex-wrap">
+               <div className="flex flex-col lg:flex-row items-start justify-between gap-3">
                 <div>
-                  <h1 className="text-2xl sm:text-3xl font-bold text-throne-900">{website.name}</h1>
+                  <h1 className="text-2xl sm:text-3xl font-bold text-throne-900 break-words">{website.name}</h1>
                   <a
                     href={website.url}
                     target="_blank"
@@ -182,7 +182,7 @@ export function WebsitePage() {
                     {website.url}
                   </a>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
+                 <div className="flex items-center gap-2 flex-wrap w-full lg:w-auto">
                   <ReportMenu targetType="website" targetId={website.id} />
                   {website.featured && <Badge variant="warning">⭐ Destaque</Badge>}
                   {website.category_name && (
@@ -194,7 +194,7 @@ export function WebsitePage() {
               </div>
 
               {website.description && (
-                <p className="text-throne-600 leading-relaxed">{website.description}</p>
+                <p className="text-throne-600 leading-relaxed break-words">{website.description}</p>
               )}
 
               {!isAuthenticated && (
@@ -204,7 +204,7 @@ export function WebsitePage() {
               )}
 
               {/* Meta */}
-               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 text-sm text-throne-400 flex-wrap">
+                <div className="grid gap-2 text-sm text-throne-400 sm:grid-cols-2">
                 <span className="flex items-center gap-1">
                   <CalendarIcon className="h-4 w-4" />
                   Adicionado a {formatDate(website.created_at)}
@@ -254,7 +254,7 @@ export function WebsitePage() {
               href={website.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-primary px-8 py-3 text-base"
+              className="btn-primary w-full sm:w-auto px-8 py-3 text-base justify-center"
             >
               <ExternalLinkIcon className="h-5 w-5" />
               Visitar Website
@@ -386,7 +386,7 @@ function CommentsSection({
   };
 
   return (
-    <div className="card p-4 sm:p-6 space-y-4">
+    <div className="card p-4 sm:p-6 space-y-3 sm:space-y-4">
       <div className="flex items-start justify-between gap-2">
         <div>
           <h2 className="text-lg font-semibold text-throne-800 flex items-center gap-2">
@@ -517,10 +517,10 @@ function CommentItem({
   };
 
   return (
-      <div className="space-y-2">
+      <div className="space-y-1.5">
       <div className="flex items-start gap-2">
         <AvatarBubble name={comment.user.name} avatarUrl={comment.user.avatar_url} />
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="font-semibold text-throne-800">{comment.user.name}</p>
             <span className="text-xs text-throne-400">{formatRelativeDate(comment.created_at)}</span>
@@ -531,7 +531,7 @@ function CommentItem({
             )}
             <ReportMenu targetType="comment" targetId={comment.id} className="ml-auto" />
           </div>
-          <p className="text-throne-700 leading-relaxed">{comment.content}</p>
+          <p className="text-throne-700 leading-relaxed break-words">{comment.content}</p>
           <div className="mt-2 flex items-center gap-3 text-sm text-throne-500 flex-wrap">
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-2 rounded-full bg-throne-50 px-2 py-1 text-xs text-throne-600">

@@ -8,6 +8,7 @@ import { useCategories } from '@/hooks/useCategories';
 import { useWebsites } from '@/hooks/useWebsites';
 import { useTodayComparison, useVoteComparison } from '@/hooks/useComparisons';
 import { useAuthStore } from '@/stores/authStore';
+import { useIdeas } from '@/hooks/useIdeas';
 
 export function HomePage() {
   const categoriesRef = useRef<HTMLElement>(null);
@@ -24,6 +25,7 @@ export function HomePage() {
     sort: 'recent',
     perPage: 4,
   });
+  const { ideas } = useIdeas();
   const { comparison, isLoading: comparisonLoading } = useTodayComparison();
   const voteComparison = useVoteComparison();
 
@@ -155,7 +157,7 @@ export function HomePage() {
           <div className="grid grid-cols-3 gap-4 text-center">
             <Stat icon="📂" value={String(categories.length)} label="categorias" />
             <Stat icon="🌐" value={String(totalWebsites)} label="websites" />
-            <Stat icon="🇵🇹" value="100%" label="para portugueses" />
+            <Stat icon="💡" value={String(ideas.length)} label="ideias" />
           </div>
         </div>
       </section>
