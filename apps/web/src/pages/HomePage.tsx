@@ -9,6 +9,7 @@ import { useWebsites } from '@/hooks/useWebsites';
 import { useTodayComparison, useVoteComparison } from '@/hooks/useComparisons';
 import { useAuthStore } from '@/stores/authStore';
 import { useIdeas } from '@/hooks/useIdeas';
+import type { Category } from '@/types';
 
 export function HomePage() {
   const categoriesRef = useRef<HTMLElement>(null);
@@ -30,6 +31,7 @@ export function HomePage() {
   const voteComparison = useVoteComparison();
 
   const totalWebsites = categories.reduce((sum, c) => sum + (c.websiteCount ?? 0), 0);
+  const totalCategories = countAllCategories(categories);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,7 +157,7 @@ export function HomePage() {
       <section className="border-b border-throne-100 bg-white">
         <div className="container-app py-6">
           <div className="grid grid-cols-3 gap-4 text-center">
-            <Stat icon="📂" value={String(categories.length)} label="categorias" />
+            <Stat icon="📂" value={String(totalCategories)} label="categorias" />
             <Stat icon="🌐" value={String(totalWebsites)} label="websites" />
             <Stat icon="💡" value={String(ideas.length)} label="ideias" />
           </div>
@@ -320,6 +322,10 @@ function LoadingGrid({ cols = 4 }: { cols?: number }) {
       ))}
     </div>
   );
+}
+
+function countAllCategories(items: Category[]): number {
+  return items.reduce((sum, item) => sum + 1 + countAllCategories(item.children ?? []), 0);
 }
 
 // Icons

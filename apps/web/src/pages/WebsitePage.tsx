@@ -189,6 +189,10 @@ export function WebsitePage() {
                     websiteName={website.name}
                     websiteUrl={website.url}
                     websiteDescription={website.description}
+                    websiteCategoryName={website.category_name}
+                    websiteLogoUrl={website.logo_url}
+                    websiteScreenshotUrl={website.screenshot_url}
+                    websiteMetadata={website.metadata}
                   />
                   {website.category_name && (
                     <Link to={`/categoria/${website.category_slug ?? ''}`}>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
+import type { WebsiteMetadata } from '@/types';
 
 type ReportTargetType = 'website' | 'comment' | 'idea' | 'idea_feature';
 const REASONS = ['Spam', 'Ofensivo', 'Fraude', 'Conteúdo impróprio', 'Outro'];
@@ -12,6 +13,10 @@ export function ReportMenu({
   websiteName,
   websiteUrl,
   websiteDescription,
+  websiteCategoryName,
+  websiteLogoUrl,
+  websiteScreenshotUrl,
+  websiteMetadata,
   className = '',
 }: {
   targetType: ReportTargetType;
@@ -19,6 +24,10 @@ export function ReportMenu({
   websiteName?: string;
   websiteUrl?: string;
   websiteDescription?: string | null;
+  websiteCategoryName?: string;
+  websiteLogoUrl?: string | null;
+  websiteScreenshotUrl?: string | null;
+  websiteMetadata?: WebsiteMetadata | null;
   className?: string;
 }) {
   const navigate = useNavigate();
@@ -33,6 +42,19 @@ export function ReportMenu({
   const [suggestName, setSuggestName] = useState(websiteName ?? '');
   const [suggestUrl, setSuggestUrl] = useState(websiteUrl ?? '');
   const [suggestDescription, setSuggestDescription] = useState(websiteDescription ?? '');
+  const [suggestCategory, setSuggestCategory] = useState(websiteCategoryName ?? '');
+  const [suggestAuthor, setSuggestAuthor] = useState(websiteMetadata?.author ?? '');
+  const [suggestLaunchDate, setSuggestLaunchDate] = useState(websiteMetadata?.launch_date ?? '');
+  const [suggestLaunchPrecision, setSuggestLaunchPrecision] = useState<NonNullable<WebsiteMetadata['launch_precision']>>(
+    websiteMetadata?.launch_precision ?? 'unknown',
+  );
+  const [suggestLanguages, setSuggestLanguages] = useState((websiteMetadata?.languages ?? []).join(', '));
+  const [suggestOpenSource, setSuggestOpenSource] = useState(Boolean(websiteMetadata?.is_open_source));
+  const [suggestSourceUrl, setSuggestSourceUrl] = useState(websiteMetadata?.source_url ?? '');
+  const [suggestLogoUrl, setSuggestLogoUrl] = useState(websiteLogoUrl ?? '');
+  const [suggestScreenshotUrl, setSuggestScreenshotUrl] = useState(websiteScreenshotUrl ?? '');
+  const [suggestImages, setSuggestImages] = useState((websiteMetadata?.images ?? []).join('\n'));
+  const [suggestOtherDetails, setSuggestOtherDetails] = useState('');
   const [formError, setFormError] = useState('');
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -47,6 +69,12 @@ export function ReportMenu({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
+
+  useEffect(() => {
+    if (showModal || showSuggestModal) {
+      setOpen(false);
+    }
+  }, [showModal, showSuggestModal]);
 
   const submitReport = async () => {
     setFormError('');
@@ -89,12 +117,56 @@ export function ReportMenu({
     const nextName = suggestName.trim();
     const nextUrl = suggestUrl.trim();
     const nextDescription = suggestDescription.trim();
+    const nextLanguages = suggestLanguages
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const nextImages = suggestImages
+      .split('\n')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const payload = {
+      name: nextName,
+      url: nextUrl,
+      description: nextDescription || null,
+      category_name: suggestCategory.trim() || null,
+      logo_url: suggestLogoUrl.trim() || null,
+      screenshot_url: suggestScreenshotUrl.trim() || null,
+      metadata: {
+        author: suggestAuthor.trim() || null,
+        launch_date: suggestLaunchDate.trim() || null,
+        launch_precision: suggestLaunchPrecision,
+        languages: nextLanguages,
+        images: nextImages,
+        is_open_source: suggestOpenSource,
+        source_url: suggestSourceUrl.trim() || null,
+        other_details: suggestOtherDetails.trim() || null,
+      },
+    };
+    const originalPayload = {
+      name: websiteName ?? '',
+      url: websiteUrl ?? '',
+      description: websiteDescription?.trim() || null,
+      category_name: websiteCategoryName ?? null,
+      logo_url: websiteLogoUrl?.trim() || null,
+      screenshot_url: websiteScreenshotUrl?.trim() || null,
+      metadata: {
+        author: websiteMetadata?.author ?? null,
+        launch_date: websiteMetadata?.launch_date ?? null,
+        launch_precision: websiteMetadata?.launch_precision ?? 'unknown',
+        languages: websiteMetadata?.languages ?? [],
+        images: websiteMetadata?.images ?? [],
+        is_open_source: Boolean(websiteMetadata?.is_open_source),
+        source_url: websiteMetadata?.source_url ?? null,
+        other_details: null,
+      },
+    };
 
     if (!nextName || !nextUrl) {
       setFormError('Nome e URL são obrigatórios.');
       return;
     }
-    if (nextName === (websiteName ?? '') && nextUrl === (websiteUrl ?? '') && nextDescription === (websiteDescription ?? '')) {
+    if (JSON.stringify(payload) === JSON.stringify(originalPayload)) {
       setFormError('Faz pelo menos uma alteração antes de enviar.');
       return;
     }
@@ -104,16 +176,11 @@ export function ReportMenu({
     setIsSubmitting(true);
 
     try {
-      const payloadLines = [
-        `Nome: ${nextName}`,
-        `URL: ${nextUrl}`,
-        `Descrição: ${nextDescription || '(sem descrição)'}`,
-      ];
       const res = await api.post<{ id: string }>('/reports', {
         target_type: 'website',
         target_id: targetId,
         reason: 'Proposta de alteração',
-        description: payloadLines.join('\n'),
+        description: JSON.stringify(payload),
       });
 
       if (!res.success) {
@@ -248,6 +315,74 @@ export function ReportMenu({
                   onChange={(e) => setSuggestDescription(e.target.value)}
                   disabled={isSubmitting}
                   maxLength={600}
+                />
+              </div>
+              <div>
+                <label className="label">Categoria</label>
+                <input className="input" value={suggestCategory} onChange={(e) => setSuggestCategory(e.target.value)} disabled={isSubmitting} />
+              </div>
+              <div>
+                <label className="label">Autor</label>
+                <input className="input" value={suggestAuthor} onChange={(e) => setSuggestAuthor(e.target.value)} disabled={isSubmitting} />
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="label">Data de lançamento</label>
+                  <input className="input" type="date" value={suggestLaunchDate} onChange={(e) => setSuggestLaunchDate(e.target.value)} disabled={isSubmitting} />
+                </div>
+                <div>
+                  <label className="label">Precisão da data</label>
+                  <select className="input" value={suggestLaunchPrecision} onChange={(e) => setSuggestLaunchPrecision(e.target.value as NonNullable<WebsiteMetadata['launch_precision']>)} disabled={isSubmitting}>
+                    <option value="exact">Exata</option>
+                    <option value="month">Mês</option>
+                    <option value="year">Ano</option>
+                    <option value="unknown">Desconhecida</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="label">Linguagens (separadas por vírgula)</label>
+                <input className="input" value={suggestLanguages} onChange={(e) => setSuggestLanguages(e.target.value)} disabled={isSubmitting} />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  id={`opensource-${targetId}`}
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={suggestOpenSource}
+                  onChange={(e) => setSuggestOpenSource(e.target.checked)}
+                  disabled={isSubmitting}
+                />
+                <label htmlFor={`opensource-${targetId}`} className="text-sm text-throne-700">Código aberto</label>
+              </div>
+              <div>
+                <label className="label">URL do código-fonte</label>
+                <input className="input" value={suggestSourceUrl} onChange={(e) => setSuggestSourceUrl(e.target.value)} disabled={isSubmitting} />
+              </div>
+              <div>
+                <label className="label">URL do logo</label>
+                <input className="input" value={suggestLogoUrl} onChange={(e) => setSuggestLogoUrl(e.target.value)} disabled={isSubmitting} />
+              </div>
+              <div>
+                <label className="label">URL do screenshot principal</label>
+                <input className="input" value={suggestScreenshotUrl} onChange={(e) => setSuggestScreenshotUrl(e.target.value)} disabled={isSubmitting} />
+              </div>
+              <div>
+                <label className="label">Outras imagens (uma por linha)</label>
+                <textarea
+                  className="input min-h-[80px]"
+                  value={suggestImages}
+                  onChange={(e) => setSuggestImages(e.target.value)}
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div>
+                <label className="label">Outros detalhes</label>
+                <textarea
+                  className="input min-h-[80px]"
+                  value={suggestOtherDetails}
+                  onChange={(e) => setSuggestOtherDetails(e.target.value)}
+                  disabled={isSubmitting}
                 />
               </div>
               {formError && <p className="text-sm text-red-600">{formError}</p>}
