@@ -7,6 +7,8 @@ import { SearchPage } from '@/pages/SearchPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
 import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage';
+import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
+import { VerifyEmailPage } from '@/pages/VerifyEmailPage';
 import { ProporWebsitePage } from '@/pages/ProporWebsitePage';
 import { ProporCategoriaPage } from '@/pages/ProporCategoriaPage';
 import { IdeaHubPage } from '@/pages/IdeaHubPage';
@@ -27,6 +29,8 @@ export default function App() {
         <Route path="entrar" element={<LoginPage />} />
         <Route path="registar" element={<RegisterPage />} />
         <Route path="esqueci-senha" element={<ForgotPasswordPage />} />
+        <Route path="redefinir-senha" element={<ResetPasswordPage />} />
+        <Route path="verificar-email" element={<VerifyEmailPage />} />
         <Route path="propor" element={<ProporWebsitePage />} />
         <Route path="propor-categoria" element={<ProporCategoriaPage />} />
         <Route path="ideias" element={<IdeaHubPage />} />

@@ -40,11 +40,20 @@ export async function sendRegistrationEmail(env: Env, to: string, name: string) 
 }
 
 export async function sendPasswordResetEmail(env: Env, to: string, token: string) {
-  const link = `${appBaseUrl(env)}/esqueci-senha?token=${encodeURIComponent(token)}`;
+  const link = `${appBaseUrl(env)}/redefinir-senha?token=${encodeURIComponent(token)}`;
   await sendWithResend(env, {
     to,
     subject: 'Recuperação de password',
     html: `<p>Recebemos um pedido para alterar a tua password.</p><p><a href="${link}">Clica aqui para continuar</a></p><p>Se não foste tu, ignora este email.</p>`,
+  });
+}
+
+export async function sendVerificationEmail(env: Env, to: string, token: string) {
+  const link = `${appBaseUrl(env)}/verificar-email?token=${encodeURIComponent(token)}`;
+  await sendWithResend(env, {
+    to,
+    subject: 'Confirma o teu email',
+    html: `<p>Confirma a tua conta para validares o email.</p><p><a href="${link}">Confirmar email</a></p>`,
   });
 }
 

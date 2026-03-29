@@ -120,6 +120,7 @@ export interface Idea {
   claimed_user_name?: string | null;
   claimed_user_avatar?: string | null;
   claimed_at?: string | null;
+  claimed_website_id?: string | null;
   created_at: string;
   upvotes: number;
   downvotes: number;

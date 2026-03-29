@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { formatDate, getInitials, cn } from '@/lib/utils';
+import { formatDate, formatRelativeDate, getInitials, cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/Spinner';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -122,8 +122,8 @@ export function WebsitePage() {
         </nav>
 
         {/* Header card */}
-        <div className="card p-6 sm:p-8">
-          <div className="flex items-start gap-4 sm:gap-6">
+        <div className="card p-4 sm:p-8">
+          <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
             {/* Logo */}
             <div className="shrink-0 space-y-3">
               {website.logo_url ? (
@@ -137,7 +137,7 @@ export function WebsitePage() {
                   {getInitials(website.name)}
                 </div>
               )}
-              <div className="flex items-center justify-center gap-2 rounded-full border border-throne-200 bg-throne-50 px-2 py-1">
+              <div className="flex items-center justify-center gap-2 rounded-full border border-throne-200 bg-throne-50 px-2 py-1 w-full sm:w-auto">
                 <button
                   className={cn(
                     'inline-flex h-8 w-8 items-center justify-center rounded-full border border-throne-200 bg-white',
@@ -170,7 +170,7 @@ export function WebsitePage() {
 
             {/* Info */}
             <div className="flex-1 min-w-0 space-y-3">
-              <div className="flex items-start justify-between gap-3 flex-wrap">
+               <div className="flex flex-col sm:flex-row items-start justify-between gap-3 flex-wrap">
                 <div>
                   <h1 className="text-2xl sm:text-3xl font-bold text-throne-900">{website.name}</h1>
                   <a
@@ -204,7 +204,7 @@ export function WebsitePage() {
               )}
 
               {/* Meta */}
-              <div className="flex items-center gap-4 text-sm text-throne-400 flex-wrap">
+               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 text-sm text-throne-400 flex-wrap">
                 <span className="flex items-center gap-1">
                   <CalendarIcon className="h-4 w-4" />
                   Adicionado a {formatDate(website.created_at)}
@@ -309,7 +309,7 @@ export function WebsitePage() {
             🔗 Websites Relacionados
           </h2>
           {relatedLoading ? (
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-3">
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="card h-40 animate-pulse bg-throne-100" />
               ))}
@@ -386,13 +386,13 @@ function CommentsSection({
   };
 
   return (
-    <div className="card p-6 space-y-5">
+    <div className="card p-4 sm:p-6 space-y-4">
       <div className="flex items-start justify-between gap-2">
         <div>
           <h2 className="text-lg font-semibold text-throne-800 flex items-center gap-2">
             <span>💬</span> Comentários
           </h2>
-          <p className="text-sm text-throne-500">
+            <p className="text-xs sm:text-sm text-throne-500">
             {totalComments > 0 ? `${totalComments} comentário${totalComments > 1 ? 's' : ''}` : 'Ainda sem comentários.'}
           </p>
         </div>
@@ -517,13 +517,13 @@ function CommentItem({
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-start gap-3">
+      <div className="space-y-2">
+      <div className="flex items-start gap-2">
         <AvatarBubble name={comment.user.name} avatarUrl={comment.user.avatar_url} />
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <p className="font-semibold text-throne-800">{comment.user.name}</p>
-            <span className="text-xs text-throne-400">{formatDate(comment.created_at)}</span>
+            <span className="text-xs text-throne-400">{formatRelativeDate(comment.created_at)}</span>
             {comment.kind && !comment.parent_id && (
               <span className="rounded-full bg-throne-100 px-2 py-0.5 text-[11px] font-medium text-throne-600">
                 {getCommentKindLabel(comment.kind)}

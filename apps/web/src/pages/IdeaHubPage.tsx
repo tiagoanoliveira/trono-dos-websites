@@ -9,6 +9,8 @@ import type { Idea } from '@/types';
 function IdeaCard({ idea }: { idea: Idea }) {
   const { isAuthenticated } = useAuthStore();
   const { vote, claim } = useIdeaMutations();
+  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [categoryId, setCategoryId] = useState('');
 
   const score = idea.upvotes - idea.downvotes;
   const userVote = idea.user_vote ?? 0;
@@ -49,17 +51,37 @@ function IdeaCard({ idea }: { idea: Idea }) {
         </div>
         <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">🧩 {idea.feature_count}</span>
         <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">💬 {idea.comment_count}</span>
-        {idea.claimed_by ? (
-          <Badge variant="info">Reclamada</Badge>
-        ) : (
+        <div className="flex items-center gap-2">
+          <input
+            className="input h-8 w-44 text-xs"
+            placeholder="URL do site"
+            value={websiteUrl}
+            onChange={(e) => setWebsiteUrl(e.target.value)}
+            disabled={!isAuthenticated}
+          />
+          <input
+            className="input h-8 w-32 text-xs"
+            placeholder="Categoria ID"
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+            disabled={!isAuthenticated}
+          />
           <button
             className="btn-secondary text-xs"
-            disabled={!isAuthenticated}
-            onClick={() => claim.mutate(idea.id)}
+            disabled={!isAuthenticated || websiteUrl.trim().length < 8 || categoryId.trim().length < 2}
+            onClick={() =>
+              claim.mutate({
+                ideaId: idea.id,
+                website_url: websiteUrl.trim(),
+                category_id: categoryId.trim(),
+                website_name: idea.title,
+                description: idea.description ?? undefined,
+              })
+            }
           >
             Reclamar ideia
           </button>
-        )}
+        </div>
       </div>
 
       <div className="flex items-center gap-2">

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env } from '../index';
 import { createSuccess, createError, generateId, getPaginationParams, buildPaginationMeta } from '../utils/helpers';
 import { requireAuth, optionalAuth, type AuthContext } from '../middleware/auth';
+import { MIN_NAME_LENGTH, normalizeUrl } from '../utils/validation';
 
 type IdeaRow = {
   id: string;
@@ -18,6 +19,8 @@ type IdeaRow = {
   feature_count: number;
   comment_count: number;
   claimed_user_name?: string | null;
+  claimed_website_id?: string | null;
+  claimed_website_status?: string | null;
 };
 
 type IdeaDetail = IdeaRow & {
@@ -65,6 +68,7 @@ const MAX_COMMENT_LENGTH = 1000;
 const COMMENT_KINDS = new Set(['opinion', 'suggestion', 'issue', 'praise', 'other', 'general']);
 let ideaFeatureVotesSchemaEnsured = false;
 let ideaCommentsSchemaEnsured = false;
+let ideaClaimSchemaEnsured = false;
 
 async function ensureIdeaFeatureVotesTable(db: D1Database) {
   if (ideaFeatureVotesSchemaEnsured) return;
@@ -120,6 +124,17 @@ async function ensureIdeaCommentsSchema(db: D1Database) {
   ideaCommentsSchemaEnsured = true;
 }
 
+async function ensureIdeaClaimSchema(db: D1Database) {
+  if (ideaClaimSchemaEnsured) return;
+  const columns = await db.prepare('PRAGMA table_info(ideas)')
+    .all<{ name: string }>()
+    .then((r) => r.results.map((row) => row.name));
+  if (!columns.includes('claimed_website_id')) {
+    await db.prepare('ALTER TABLE ideas ADD COLUMN claimed_website_id TEXT REFERENCES websites(id)').run();
+  }
+  ideaClaimSchemaEnsured = true;
+}
+
 function resolveStatus(row: IdeaRow) {
   if (row.status !== 'approved' && row.upvotes - row.downvotes >= APPROVAL_THRESHOLD) {
     return 'approved';
@@ -131,6 +146,7 @@ export const ideasRouter = new Hono<{ Bindings: Env } & AuthContext>();
 
 ideasRouter.get('/', optionalAuth, async (c) => {
   try {
+    await ensureIdeaClaimSchema(c.env.DB);
     const url = new URL(c.req.url);
     const { page, perPage, offset } = getPaginationParams(url);
 
@@ -139,11 +155,13 @@ ideasRouter.get('/', optionalAuth, async (c) => {
               COALESCE(SUM(CASE WHEN v.value = 1 THEN 1 ELSE 0 END),0) AS upvotes,
               COALESCE(SUM(CASE WHEN v.value = -1 THEN 1 ELSE 0 END),0) AS downvotes,
               ${c.get('userId') ? 'MAX(CASE WHEN v.user_id = ? THEN v.value END)' : 'NULL'} AS user_vote,
-              COALESCE(f.feature_count,0) AS feature_count,
-              COALESCE(cm.comment_count,0) AS comment_count,
-              cu.name AS claimed_user_name,
-              cu.avatar_url AS claimed_user_avatar
-       FROM ideas i
+               COALESCE(f.feature_count,0) AS feature_count,
+               COALESCE(cm.comment_count,0) AS comment_count,
+               cu.name AS claimed_user_name,
+               cu.avatar_url AS claimed_user_avatar,
+               i.claimed_website_id,
+               cw.status AS claimed_website_status
+        FROM ideas i
        LEFT JOIN idea_votes v ON v.idea_id = i.id
        LEFT JOIN (
          SELECT idea_id, COUNT(*) AS feature_count FROM idea_features GROUP BY idea_id
@@ -152,13 +170,14 @@ ideasRouter.get('/', optionalAuth, async (c) => {
          SELECT idea_id, COUNT(*) AS comment_count FROM idea_comments GROUP BY idea_id
        ) cm ON cm.idea_id = i.id
        LEFT JOIN users cu ON cu.id = i.claimed_by
-       GROUP BY i.id
-       ORDER BY i.created_at DESC
-       LIMIT ? OFFSET ?`,
+       LEFT JOIN websites cw ON cw.id = i.claimed_website_id
+        GROUP BY i.id
+        ORDER BY i.created_at DESC
+        LIMIT ? OFFSET ?`,
     )
       .bind(...(c.get('userId') ? [c.get('userId'), perPage, offset] : [perPage, offset]))
       .all<IdeaRow>()
-      .then((r) => r.results.map((row) => ({ ...row, status: resolveStatus(row) })));
+      .then((r) => r.results.filter((row) => row.claimed_website_status !== 'approved').map((row) => ({ ...row, status: resolveStatus(row) })));
 
     const totalRow = await c.env.DB.prepare('SELECT COUNT(*) AS total FROM ideas')
       .first<{ total: number }>();
@@ -176,6 +195,7 @@ ideasRouter.get('/:id', optionalAuth, async (c) => {
     const userId = c.get('userId');
     await ensureIdeaFeatureVotesTable(c.env.DB);
     await ensureIdeaCommentsSchema(c.env.DB);
+    await ensureIdeaClaimSchema(c.env.DB);
 
     const idea = await c.env.DB.prepare(
       `SELECT i.*,
@@ -184,8 +204,9 @@ ideasRouter.get('/:id', optionalAuth, async (c) => {
               ${userId ? 'MAX(CASE WHEN v.user_id = ? THEN v.value END)' : 'NULL'} AS user_vote,
               COALESCE(f.feature_count,0) AS feature_count,
               COALESCE(cm.comment_count,0) AS comment_count,
-              cu.name AS claimed_user_name,
-              cu.avatar_url AS claimed_user_avatar
+               cu.name AS claimed_user_name,
+               cu.avatar_url AS claimed_user_avatar,
+               i.claimed_website_id
        FROM ideas i
        LEFT JOIN idea_votes v ON v.idea_id = i.id
        LEFT JOIN (
@@ -710,10 +731,19 @@ ideasRouter.post('/comments/:commentId/votes', requireAuth, async (c) => {
 
 ideasRouter.post('/:id/claim', requireAuth, async (c) => {
   try {
+    await ensureIdeaClaimSchema(c.env.DB);
     const { id } = c.req.param();
     const userId = c.get('userId');
+    let body: { website_name?: unknown; website_url?: unknown; category_id?: unknown; description?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json(createError('INVALID_JSON', 'Corpo inválido'), 400);
+    }
 
-    const idea = await c.env.DB.prepare('SELECT claimed_by FROM ideas WHERE id = ?').bind(id).first<{
+    const idea = await c.env.DB.prepare('SELECT title, description, claimed_by FROM ideas WHERE id = ?').bind(id).first<{
+      title: string;
+      description: string | null;
       claimed_by: string | null;
     }>();
     if (!idea) return c.json(createError('NOT_FOUND', 'Ideia não encontrada'), 404);
@@ -722,13 +752,55 @@ ideasRouter.post('/:id/claim', requireAuth, async (c) => {
       return c.json(createError('ALREADY_CLAIMED', 'Esta ideia já foi reclamada'), 409);
     }
 
+    const websiteName = typeof body.website_name === 'string' ? body.website_name.trim() : idea.title.trim();
+    const websiteDescription = typeof body.description === 'string' ? body.description.trim() : (idea.description ?? null);
+    if (websiteName.length < MIN_NAME_LENGTH) {
+      return c.json(createError('VALIDATION_ERROR', `Nome deve ter pelo menos ${MIN_NAME_LENGTH} caracteres`), 400);
+    }
+    if (typeof body.website_url !== 'string' || !body.website_url.trim()) {
+      return c.json(createError('VALIDATION_ERROR', 'URL do website é obrigatória'), 400);
+    }
+
+    let normalizedUrl = '';
+    try {
+      normalizedUrl = normalizeUrl(new URL(body.website_url).toString());
+    } catch {
+      return c.json(createError('VALIDATION_ERROR', 'URL inválida'), 400);
+    }
+
+    if (typeof body.category_id !== 'string' || !body.category_id.trim()) {
+      return c.json(createError('VALIDATION_ERROR', 'Categoria é obrigatória'), 400);
+    }
+
+    const category = await c.env.DB.prepare('SELECT id FROM categories WHERE id = ? AND status = "active"')
+      .bind(body.category_id)
+      .first<{ id: string }>();
+    if (!category) {
+      return c.json(createError('VALIDATION_ERROR', 'Categoria inválida'), 400);
+    }
+
+    const duplicated = await c.env.DB.prepare('SELECT id FROM websites WHERE url = ?')
+      .bind(normalizedUrl)
+      .first<{ id: string }>();
+    if (duplicated) {
+      return c.json(createError('DUPLICATE', 'Já existe website com este URL'), 409);
+    }
+
+    const websiteId = generateId();
     await c.env.DB.prepare(
-      'UPDATE ideas SET claimed_by = ?, claimed_at = CURRENT_TIMESTAMP, status = COALESCE(status, "open") WHERE id = ?',
+      `INSERT INTO websites (id, name, url, description, category_id, status, submitted_by, featured, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'pending', ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
     )
-      .bind(userId, id)
+      .bind(websiteId, websiteName, normalizedUrl, websiteDescription, body.category_id, userId)
       .run();
 
-    return c.json(createSuccess({ ok: true }));
+    await c.env.DB.prepare(
+      'UPDATE ideas SET claimed_by = ?, claimed_at = CURRENT_TIMESTAMP, claimed_website_id = ?, status = "open" WHERE id = ?',
+    )
+      .bind(userId, websiteId, id)
+      .run();
+
+    return c.json(createSuccess({ ok: true, website_id: websiteId }));
   } catch (err) {
     console.error('[ideas POST /:id/claim]', err);
     return c.json(createError('INTERNAL_ERROR', 'Não foi possível reclamar a ideia'), 500);

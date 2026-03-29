@@ -4,22 +4,26 @@ import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Spinner } from '@/components/ui/Spinner';
 import { ReportMenu } from '@/components/ui/ReportMenu';
-import { cn, formatDate } from '@/lib/utils';
+import { cn, formatDate, formatRelativeDate } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { useIdeaDetail, useIdeaMutations } from '@/hooks/useIdeas';
 import { useVoteIdeaComment } from '@/hooks/useIdeaComments';
 import type { IdeaComment } from '@/types';
+import { useCategories } from '@/hooks/useCategories';
 
 export function IdeaDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const { isAuthenticated } = useAuthStore();
   const { idea, isLoading, error } = useIdeaDetail(id);
   const { vote, voteFeature, addFeature, addComment, claim } = useIdeaMutations();
+  const { categories } = useCategories();
   const voteIdeaComment = useVoteIdeaComment(id);
   const [feature, setFeature] = useState('');
   const [comment, setComment] = useState('');
   const [kind, setKind] = useState('opinion');
   const [commentError, setCommentError] = useState('');
+  const [claimWebsiteUrl, setClaimWebsiteUrl] = useState('');
+  const [claimCategoryId, setClaimCategoryId] = useState('');
 
   if (isLoading) {
     return (
@@ -94,13 +98,43 @@ export function IdeaDetailPage() {
           </span>
           <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">🧩 {idea.feature_count}</span>
           <span className="px-2 py-1 rounded-full bg-throne-100 text-throne-800">💬 {idea.comment_count}</span>
-          {idea.claimed_by ? (
-            <Badge variant="info">Reclamada</Badge>
-          ) : (
-            <button className="btn-secondary text-xs" disabled={!isAuthenticated} onClick={() => claim.mutate(idea.id)}>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              className="input h-8 w-44 text-xs"
+              placeholder="URL do site implementado"
+              value={claimWebsiteUrl}
+              onChange={(e) => setClaimWebsiteUrl(e.target.value)}
+              disabled={!isAuthenticated}
+            />
+            <select
+              className="input h-8 w-44 text-xs"
+              value={claimCategoryId}
+              onChange={(e) => setClaimCategoryId(e.target.value)}
+              disabled={!isAuthenticated}
+            >
+              <option value="">Categoria</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+            <button
+              className="btn-secondary text-xs"
+              disabled={!isAuthenticated || claimWebsiteUrl.trim().length < 8 || claimCategoryId.trim().length < 2}
+              onClick={() =>
+                claim.mutate({
+                  ideaId: idea.id,
+                  website_url: claimWebsiteUrl.trim(),
+                  category_id: claimCategoryId.trim(),
+                  website_name: idea.title,
+                  description: idea.description ?? undefined,
+                })
+              }
+            >
               Reclamar ideia
             </button>
-          )}
+          </div>
         </div>
 
       </section>
@@ -278,7 +312,7 @@ function IdeaCommentItem({
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <p className="font-semibold text-throne-800">{comment.user.name}</p>
-            <span className="text-xs text-throne-400">{formatDate(comment.created_at)}</span>
+            <span className="text-xs text-throne-400">{formatRelativeDate(comment.created_at)}</span>
             {comment.kind && !comment.parent_id && (
               <span className="rounded-full bg-throne-100 px-2 py-0.5 text-[11px] font-medium text-throne-600">
                 {getCommentKindLabel(comment.kind)}

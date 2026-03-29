@@ -7,6 +7,8 @@ export interface AuthUser {
   name: string;
   avatar_url: string | null;
   role: 'user' | 'moderator' | 'admin';
+  is_blocked?: boolean;
+  email_verified?: boolean;
 }
 
 interface AuthState {

@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import { Spinner } from '@/components/ui/Spinner';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatRelativeDate } from '@/lib/utils';
 import type { PaginatedResponse, Website } from '@/types';
 
 type AdminTab = 'websites' | 'categories' | 'reports' | 'users';
@@ -38,7 +38,14 @@ type AdminUser = {
   name: string;
   avatar_url: string | null;
   role: 'user' | 'moderator' | 'admin';
+  is_blocked?: number;
   created_at: string;
+};
+
+type ReportTargetPayload = {
+  report: ReportRow;
+  target: Record<string, unknown> | null;
+  frontend_url: string | null;
 };
 
 function unwrapPaginated<T>(raw: unknown, meta?: unknown): PaginatedResponse<T> {
@@ -111,6 +118,20 @@ export function AdminPage() {
     enabled: isAdmin,
   });
 
+  const [editingReportId, setEditingReportId] = useState<string | null>(null);
+  const [reportEditValue, setReportEditValue] = useState('');
+
+  const reportTarget = useQuery({
+    queryKey: ['admin', 'report-target', editingReportId],
+    queryFn: async () => {
+      if (!editingReportId) return null;
+      const res = await api.get<ReportTargetPayload>(`/reports/${editingReportId}/target`);
+      if (!res.success || !res.data) throw new Error(res.error?.message ?? 'Erro ao carregar origem');
+      return res.data;
+    },
+    enabled: Boolean(editingReportId),
+  });
+
   const moderateWebsite = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: 'approved' | 'rejected' }) => {
       const res = await api.patch(`/websites/${id}/status`, { status });
@@ -141,6 +162,38 @@ export function AdminPage() {
       if (!res.success) throw new Error(res.error?.message ?? 'Falha a atualizar role');
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }),
+  });
+
+  const toggleUserBlock = useMutation({
+    mutationFn: async ({ id, blocked }: { id: string; blocked: boolean }) => {
+      const res = await api.patch(`/users/${id}/block`, { blocked });
+      if (!res.success) throw new Error(res.error?.message ?? 'Falha a atualizar bloqueio');
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }),
+  });
+
+  const editReportedTarget = useMutation({
+    mutationFn: async ({ reportId, payload }: { reportId: string; payload: Record<string, string> }) => {
+      const res = await api.patch(`/reports/${reportId}/target`, payload);
+      if (!res.success) throw new Error(res.error?.message ?? 'Falha a editar conteúdo');
+    },
+    onSuccess: () => {
+      if (editingReportId) {
+        queryClient.invalidateQueries({ queryKey: ['admin', 'report-target', editingReportId] });
+      }
+    },
+  });
+
+  const deleteReportedTarget = useMutation({
+    mutationFn: async (reportId: string) => {
+      const res = await api.delete(`/reports/${reportId}/target`);
+      if (!res.success) throw new Error(res.error?.message ?? 'Falha a eliminar conteúdo');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'reports', 'pending'] });
+      setEditingReportId(null);
+      setReportEditValue('');
+    },
   });
 
   const tabs = useMemo(
@@ -252,9 +305,19 @@ export function AdminPage() {
                 </p>
                 <p className="text-sm text-throne-700">{item.reason}</p>
                 {item.description && <p className="text-xs text-throne-500">{item.description}</p>}
-                <div className="flex gap-2 pt-1">
-                  <button className="btn-secondary" onClick={() => moderateReport.mutate({ id: item.id, status: 'reviewed' })}>Marcar revisto</button>
-                  <button className="btn-primary" onClick={() => moderateReport.mutate({ id: item.id, status: 'resolved' })}>Resolver</button>
+                <p className="text-[11px] text-throne-400">{formatRelativeDate(item.created_at)}</p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button className="btn-secondary" onClick={() => setEditingReportId(item.id)}>Visualizar</button>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => {
+                      setEditingReportId(item.id);
+                      setReportEditValue('');
+                    }}
+                  >
+                    Editar Conteúdo
+                  </button>
+                  <button className="btn-primary" onClick={() => deleteReportedTarget.mutate(item.id)}>Eliminar Conteúdo</button>
                   <button className="btn-ghost" onClick={() => moderateReport.mutate({ id: item.id, status: 'dismissed' })}>Dispensar</button>
                 </div>
               </div>
@@ -284,10 +347,79 @@ export function AdminPage() {
                   <option value="moderator">moderator</option>
                   <option value="admin">admin</option>
                 </select>
+                <button
+                  className="btn-secondary"
+                  onClick={() => toggleUserBlock.mutate({ id: item.id, blocked: !(item.is_blocked ?? 0) })}
+                >
+                  {(item.is_blocked ?? 0) ? 'Desbloquear' : 'Bloquear'}
+                </button>
               </div>
             ))}
           </div>
         </section>
+      )}
+
+      {editingReportId && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-xl rounded-xl border border-throne-200 bg-white p-4 shadow-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-throne-900">Origem da denúncia</h3>
+              <button className="btn-ghost" onClick={() => setEditingReportId(null)}>Fechar</button>
+            </div>
+            {reportTarget.isLoading && <Spinner className="text-crown-500" />}
+            {reportTarget.data && (
+              <>
+                <div className="rounded-lg border border-throne-200 bg-throne-50 p-3 text-sm">
+                  <pre className="whitespace-pre-wrap break-words">{JSON.stringify(reportTarget.data.target, null, 2)}</pre>
+                </div>
+                {reportTarget.data.frontend_url && (
+                  <Link
+                    to={reportTarget.data.frontend_url}
+                    target="_blank"
+                    className="btn-secondary inline-flex"
+                  >
+                    Visualizar site/idea/comentário/feature
+                  </Link>
+                )}
+                <div className="space-y-2">
+                  <label className="label">Novo conteúdo (edição rápida)</label>
+                  <textarea
+                    className="input min-h-[100px]"
+                    value={reportEditValue}
+                    onChange={(e) => setReportEditValue(e.target.value)}
+                    placeholder="Conteúdo editado..."
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="btn-primary"
+                      onClick={() => {
+                        const targetType = reportTarget.data?.report.target_type;
+                        if (!targetType) return;
+                        if (targetType === 'website') {
+                          editReportedTarget.mutate({ reportId: editingReportId, payload: { description: reportEditValue } });
+                        } else if (targetType === 'idea') {
+                          editReportedTarget.mutate({ reportId: editingReportId, payload: { description: reportEditValue } });
+                        } else if (targetType === 'idea_feature') {
+                          editReportedTarget.mutate({ reportId: editingReportId, payload: { description: reportEditValue } });
+                        } else {
+                          editReportedTarget.mutate({ reportId: editingReportId, payload: { content: reportEditValue } });
+                        }
+                      }}
+                    >
+                      Guardar edição
+                    </button>
+                    <button className="btn-secondary" onClick={() => deleteReportedTarget.mutate(editingReportId)}>
+                      Eliminar Conteúdo
+                    </button>
+                    <button className="btn-ghost" onClick={() => moderateReport.mutate({ id: editingReportId, status: 'dismissed' })}>
+                      Dispensar
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -120,14 +120,25 @@ export function useIdeaMutations() {
   });
 
   const claim = useMutation({
-    mutationFn: async (ideaId: string) => {
-      const res = await api.post('/ideas/' + ideaId + '/claim', {});
+    mutationFn: async (payload: {
+      ideaId: string;
+      website_url: string;
+      category_id: string;
+      website_name?: string;
+      description?: string;
+    }) => {
+      const res = await api.post('/ideas/' + payload.ideaId + '/claim', {
+        website_url: payload.website_url,
+        category_id: payload.category_id,
+        website_name: payload.website_name,
+        description: payload.description,
+      });
       if (!res.success) throw new Error(res.error?.message || 'Erro ao reclamar ideia');
       return res.data;
     },
-    onSuccess: (_, ideaId) => {
+    onSuccess: (_, payload) => {
       qc.invalidateQueries({ queryKey: ['ideas'] });
-      qc.invalidateQueries({ queryKey: ['ideas', ideaId] });
+      qc.invalidateQueries({ queryKey: ['ideas', payload.ideaId] });
     },
   });
 
