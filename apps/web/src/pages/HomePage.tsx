@@ -110,6 +110,7 @@ export function HomePage() {
               <div className="grid items-center gap-3 md:grid-cols-[1fr_auto_1fr]">
                 <BattleSite
                   name={comparison.website_a.name}
+                  url={comparison.website_a.url}
                   logoUrl={comparison.website_a.logo_url}
                   score={comparison.votes_a}
                   selected={comparison.user_vote === comparison.website_a.id}
@@ -145,6 +146,7 @@ export function HomePage() {
                 </div>
                 <BattleSite
                   name={comparison.website_b.name}
+                  url={comparison.website_b.url}
                   logoUrl={comparison.website_b.logo_url}
                   score={comparison.votes_b}
                   selected={comparison.user_vote === comparison.website_b.id}
@@ -250,11 +252,13 @@ export function HomePage() {
 
 function BattleSite({
   name,
+  url,
   logoUrl,
   score,
   selected,
 }: {
   name: string;
+  url: string;
   logoUrl: string | null;
   score: number;
   selected: boolean;
@@ -273,7 +277,18 @@ function BattleSite({
           <div className="truncate font-medium text-throne-900">{name}</div>
         </div>
       </div>
-      <div className="mt-2 text-xs text-throne-500">Votos: {score}</div>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <div className="text-xs text-throne-500">Votos: {score}</div>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-secondary btn-sm"
+          aria-label={`Consultar ${name} (abre em nova aba)`}
+        >
+          Consultar
+        </a>
+      </div>
     </div>
   );
 }
